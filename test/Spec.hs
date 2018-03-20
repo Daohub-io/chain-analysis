@@ -47,12 +47,7 @@ mainWithOpts = do
 
 tests =
     [ testGroup "OpCodes" $ (hUnitTestToTests singleOpCodes)
-    -- , testGroup "Upload" $ hUnitTestToTests uploadTests
-    -- , testGroup "Email" $ hUnitTestToTests emailTests
-    -- , testGroup "TimingLogs" $ hUnitTestToTests timeLoggingTests
     -- , testProperty "leftOrRight Order"  prop_leftOrRight_order
-    -- , testProperty "isConvex Start Point" prop_isConvex_startPoint
-    -- , testProperty "isQuadConvex Order" prop_isQuadConvex_order
     ]
 
 -- |Parse each of the opcodes individually.
