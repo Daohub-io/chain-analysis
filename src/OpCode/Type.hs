@@ -156,152 +156,152 @@ data OpCode
 
 instance Arbitrary OpCode where
     arbitrary = oneof
-            [ pure STOP
-            , pure ADD
-            , pure MUL
-            , pure SUB
-            , pure DIV
-            , pure SDIV
-            , pure MOD
-            , pure SMOD
-            , pure ADDMOD
-            , pure MULMOD
-            , pure EXP
-            , pure SIGNEXTEND
-            , pure LT
-            , pure GT
-            , pure SLT
-            , pure SGT
-            , pure EQ
-            , pure ISZERO
-            , pure AND
-            , pure OR
-            , pure XOR
-            , pure NOT
-            , pure BYTE
-            , pure SHA3
-            , pure ADDRESS
-            , pure BALANCE
-            , pure ORIGIN
-            , pure CALLER
-            , pure CALLVALUE
-            , pure CALLDATALOAD
-            , pure CALLDATASIZE
-            , pure CALLDATACOPY
-            , pure CODESIZE
-            , pure CODECOPY
-            , pure GASPRICE
-            , pure EXTCODESIZE
-            , pure EXTCODECOPY
-            , pure RETURNDATASIZE
-            , pure RETURNDATACOPY
-            , pure BLOCKHASH
-            , pure COINBASE
-            , pure TIMESTAMP
-            , pure NUMBER
-            , pure DIFFICULTY
-            , pure GASLIMIT
-            , pure POP
-            , pure MLOAD
-            , pure MSTORE
-            , pure MSTORE8
-            , pure SLOAD
-            , pure SSTORE
-            , pure JUMP
-            , pure JUMPI
-            , pure PC
-            , pure MSIZE
-            , pure GAS
-            , pure JUMPDEST
-            , arbitraryPUSH1
-            , arbitraryPUSH2
-            , arbitraryPUSH3
-            , arbitraryPUSH4
-            , arbitraryPUSH5
-            , arbitraryPUSH6
-            , arbitraryPUSH7
-            , arbitraryPUSH8
-            , arbitraryPUSH9
-            , arbitraryPUSH10
-            , arbitraryPUSH11
-            , arbitraryPUSH12
-            , arbitraryPUSH13
-            , arbitraryPUSH14
-            , arbitraryPUSH15
-            , arbitraryPUSH16
-            , arbitraryPUSH17
-            , arbitraryPUSH18
-            , arbitraryPUSH19
-            , arbitraryPUSH20
-            , arbitraryPUSH21
-            , arbitraryPUSH22
-            , arbitraryPUSH23
-            , arbitraryPUSH24
-            , arbitraryPUSH25
-            , arbitraryPUSH26
-            , arbitraryPUSH27
-            , arbitraryPUSH28
-            , arbitraryPUSH29
-            , arbitraryPUSH30
-            , arbitraryPUSH31
-            , arbitraryPUSH32
-            , pure DUP1
-            , pure DUP2
-            , pure DUP3
-            , pure DUP4
-            , pure DUP5
-            , pure DUP6
-            , pure DUP7
-            , pure DUP8
-            , pure DUP9
-            , pure DUP10
-            , pure DUP11
-            , pure DUP12
-            , pure DUP13
-            , pure DUP14
-            , pure DUP15
-            , pure DUP16
-            , pure SWAP1
-            , pure SWAP2
-            , pure SWAP3
-            , pure SWAP4
-            , pure SWAP5
-            , pure SWAP6
-            , pure SWAP7
-            , pure SWAP8
-            , pure SWAP9
-            , pure SWAP10
-            , pure SWAP11
-            , pure SWAP12
-            , pure SWAP13
-            , pure SWAP14
-            , pure SWAP15
-            , pure SWAP16
-            , pure LOG0
-            , pure LOG1
-            , pure LOG2
-            , pure LOG3
-            , pure LOG4
-            , pure CREATE
-            , pure CALL
-            , pure CALLCODE
-            , pure RETURN
-            , pure DELEGATECALL
-            , pure STATICCALL
-            , pure REVERT
-            , pure INVALID
-            , pure SELFDESTRUCT
-            ]
+        [ pure STOP
+        , pure ADD
+        , pure MUL
+        , pure SUB
+        , pure DIV
+        , pure SDIV
+        , pure MOD
+        , pure SMOD
+        , pure ADDMOD
+        , pure MULMOD
+        , pure EXP
+        , pure SIGNEXTEND
+        , pure LT
+        , pure GT
+        , pure SLT
+        , pure SGT
+        , pure EQ
+        , pure ISZERO
+        , pure AND
+        , pure OR
+        , pure XOR
+        , pure NOT
+        , pure BYTE
+        , pure SHA3
+        , pure ADDRESS
+        , pure BALANCE
+        , pure ORIGIN
+        , pure CALLER
+        , pure CALLVALUE
+        , pure CALLDATALOAD
+        , pure CALLDATASIZE
+        , pure CALLDATACOPY
+        , pure CODESIZE
+        , pure CODECOPY
+        , pure GASPRICE
+        , pure EXTCODESIZE
+        , pure EXTCODECOPY
+        , pure RETURNDATASIZE
+        , pure RETURNDATACOPY
+        , pure BLOCKHASH
+        , pure COINBASE
+        , pure TIMESTAMP
+        , pure NUMBER
+        , pure DIFFICULTY
+        , pure GASLIMIT
+        , pure POP
+        , pure MLOAD
+        , pure MSTORE
+        , pure MSTORE8
+        , pure SLOAD
+        , pure SSTORE
+        , pure JUMP
+        , pure JUMPI
+        , pure PC
+        , pure MSIZE
+        , pure GAS
+        , pure JUMPDEST
+        , arbitraryPUSH1
+        , arbitraryPUSH2
+        , arbitraryPUSH3
+        , arbitraryPUSH4
+        , arbitraryPUSH5
+        , arbitraryPUSH6
+        , arbitraryPUSH7
+        , arbitraryPUSH8
+        , arbitraryPUSH9
+        , arbitraryPUSH10
+        , arbitraryPUSH11
+        , arbitraryPUSH12
+        , arbitraryPUSH13
+        , arbitraryPUSH14
+        , arbitraryPUSH15
+        , arbitraryPUSH16
+        , arbitraryPUSH17
+        , arbitraryPUSH18
+        , arbitraryPUSH19
+        , arbitraryPUSH20
+        , arbitraryPUSH21
+        , arbitraryPUSH22
+        , arbitraryPUSH23
+        , arbitraryPUSH24
+        , arbitraryPUSH25
+        , arbitraryPUSH26
+        , arbitraryPUSH27
+        , arbitraryPUSH28
+        , arbitraryPUSH29
+        , arbitraryPUSH30
+        , arbitraryPUSH31
+        , arbitraryPUSH32
+        , pure DUP1
+        , pure DUP2
+        , pure DUP3
+        , pure DUP4
+        , pure DUP5
+        , pure DUP6
+        , pure DUP7
+        , pure DUP8
+        , pure DUP9
+        , pure DUP10
+        , pure DUP11
+        , pure DUP12
+        , pure DUP13
+        , pure DUP14
+        , pure DUP15
+        , pure DUP16
+        , pure SWAP1
+        , pure SWAP2
+        , pure SWAP3
+        , pure SWAP4
+        , pure SWAP5
+        , pure SWAP6
+        , pure SWAP7
+        , pure SWAP8
+        , pure SWAP9
+        , pure SWAP10
+        , pure SWAP11
+        , pure SWAP12
+        , pure SWAP13
+        , pure SWAP14
+        , pure SWAP15
+        , pure SWAP16
+        , pure LOG0
+        , pure LOG1
+        , pure LOG2
+        , pure LOG3
+        , pure LOG4
+        , pure CREATE
+        , pure CALL
+        , pure CALLCODE
+        , pure RETURN
+        , pure DELEGATECALL
+        , pure STATICCALL
+        , pure REVERT
+        , pure INVALID
+        , pure SELFDESTRUCT
+        ]
 
-arbitraryPUSH1 = PUSH1 <$> arbitrary
-arbitraryPUSH2 = PUSH2 <$> arbitrary <*> arbitrary
-arbitraryPUSH3 = PUSH3 <$> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH4 = PUSH4 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH5 = PUSH5 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH6 = PUSH6 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH7 = PUSH7 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH8 = PUSH8 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH9 = PUSH9 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH1  = PUSH1  <$> arbitrary
+arbitraryPUSH2  = PUSH2  <$> arbitrary <*> arbitrary
+arbitraryPUSH3  = PUSH3  <$> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH4  = PUSH4  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH5  = PUSH5  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH6  = PUSH6  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH7  = PUSH7  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH8  = PUSH8  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH9  = PUSH9  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 arbitraryPUSH10 = PUSH10 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 arbitraryPUSH11 = PUSH11 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 arbitraryPUSH12 = PUSH12 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

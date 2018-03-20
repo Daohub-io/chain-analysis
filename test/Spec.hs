@@ -54,7 +54,7 @@ mainWithOpts = do
 tests =
     [ testGroup "OpCodes" $ (hUnitTestToTests singleOpCodes)
     -- , testGroup "Conversion" $ (hUnitTestToTests conversionTests)
-    , testProperty "Parse Single OpCode" prop_anyValidOpCode_roundTrip
+    , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     ]
 
 prop_anyValidOpCode_roundTrip :: OpCode -> Bool
@@ -67,17 +67,34 @@ prop_anyValidOpCode_roundTrip opCode =
         Done i oc -> True
 
 -- Parse each of the opcodes individually.
+-- TODO: finish this list.
 singleOpCodes = TestLabel "SingleOpCodes" $ TestList
-    [ parseSTOPTest
-    , parseSTOPTestNot
-    , testExampleContract
+    [ singleParseTest parseSTOP STOP (pack [0x00])
+    , singleParseTest parseADD ADD (pack [0x01])
+    , singleParseTest parseMUL MUL (pack [0x02])
+    , singleParseTest parseSUB SUB (pack [0x03])
+    , singleParseTest parseDIV DIV (pack [0x04])
+    , singleParseTest parseSDIV SDIV (pack [0x05])
+    , singleParseTest parseMOD MOD (pack [0x06])
+    , singleParseTest parseSMOD SMOD (pack [0x07])
+    , singleParseTest parseADDMOD ADDMOD (pack [0x08])
+    , singleParseTest parseMULMOD MULMOD (pack [0x09])
+    , singleParseTest parseEXP EXP (pack [0x0a])
+    , singleParseTest parseSIGNEXTEND SIGNEXTEND (pack [0x0b])
+
     ]
 
-parseSTOPTest = TestLabel "Parse STOP OpCode" $ TestCase $ do
-    let res = parseOnly (parseSTOP <* endOfInput) (pack [0x00])
-    case res of
-        Right STOP -> pure ()
-        _ -> assertFailure $ "STOP should be parsed, but was not"
+singleParseTest parser target unparsed = TestLabel ("Parse " ++ show target ++ " OpCode") $ TestCase $ do
+    case parseOnly (parser <* endOfInput) unparsed of
+        Left err -> assertFailure $ "Opcodes should be parsed in full: " ++ err
+        Right parsed -> assertEqual "parsed and target should be equal" parsed target
+    -- For the opposite test, if input is MUL, use SUB, else use MUL
+    let contraCase = if unparsed == pack [0x02] then pack [0x03] else pack [0x02]
+    case parseOnly (parser <* endOfInput) contraCase of
+        Left err -> pure ()
+        Right parsed -> assertBool "parsed and target should not be equal" (parsed /= target)
+
+
 -- Parse something that is not the STOP OpCode
 parseSTOPTestNot = TestLabel "Parse STOP OpCode Not" $ TestCase $ do
     case parseOnly (parseSTOP <* endOfInput) (pack [0x01]) of
@@ -87,9 +104,8 @@ parseSTOPTestNot = TestLabel "Parse STOP OpCode Not" $ TestCase $ do
 testExampleContract = TestLabel "Parse Example Contract" $ TestCase $ do
     let (bs,_) = decode $ C8.pack "6060604052341561000f57600080fd5b60ba8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063771602f7146044575b600080fd5b3415604e57600080fd5b606b60048080359060200190919080359060200190919050506081565b6040518082815260200191505060405180910390f35b60008183019050929150505600a165627a7a723058203691f76bc66e6d69f31bbfe2298197772c0c4c64b8eaefe9eec731a4e91fc1a50029"
     case parse (parseOpCodes <* endOfInput) bs of
-        Fail i contexts err -> do
-            print (encode i)
-            assertFailure $ "Opcodes should be parsed in full"
+        Fail i contexts err ->
+            assertFailure $ "Opcodes should be parsed in full, remainder: " ++ show (encode i)
         Done i ocs -> do
             mapM_ print ocs
             pure ()
