@@ -22,8 +22,12 @@ library
       base >=4.7 && <5
       , bytestring
       , attoparsec
+      , QuickCheck
   exposed-modules:
-      Lib
+      OpCode.Exporter,
+      OpCode.Parser,
+      OpCode.Type,
+      JumpChecker
   other-modules:
       Paths_evm_mod
   default-language: Haskell2010
@@ -54,11 +58,11 @@ test-suite evm-mod-test
     , base16-bytestring
     , bytestring
     , attoparsec
-    , HUnit -any
-    , QuickCheck -any
-    , test-framework -any
-    , test-framework-hunit -any
-    , test-framework-quickcheck2 -any
+    , HUnit
+    , QuickCheck
+    , test-framework
+    , test-framework-hunit
+    , test-framework-quickcheck2
   other-modules:
       Paths_evm_mod
   default-language: Haskell2010

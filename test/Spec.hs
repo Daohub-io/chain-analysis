@@ -18,7 +18,10 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck
 import Test.HUnit
 
-import Lib
+import OpCode.Exporter
+import OpCode.Parser
+import OpCode.Type
+import JumpChecker
 
 import Data.List
 
@@ -50,8 +53,18 @@ mainWithOpts = do
 
 tests =
     [ testGroup "OpCodes" $ (hUnitTestToTests singleOpCodes)
-    -- , testProperty "leftOrRight Order"  prop_leftOrRight_order
+    -- , testGroup "Conversion" $ (hUnitTestToTests conversionTests)
+    , testProperty "Parse Single OpCode" prop_anyValidOpCode_roundTrip
     ]
+
+prop_anyValidOpCode_roundTrip :: OpCode -> Bool
+prop_anyValidOpCode_roundTrip opCode =
+    let bs = toByteString opCode
+        parseResult = parse parseOpCode bs
+    in case parseResult of
+        Fail i contexts err -> False
+        -- Partial _ ->
+        Done i oc -> True
 
 -- Parse each of the opcodes individually.
 singleOpCodes = TestLabel "SingleOpCodes" $ TestList
@@ -72,14 +85,75 @@ parseSTOPTestNot = TestLabel "Parse STOP OpCode Not" $ TestCase $ do
         Right oc -> assertFailure $ "No opcode should be parsed, but " ++ show oc ++ " was parsed"
 
 testExampleContract = TestLabel "Parse Example Contract" $ TestCase $ do
-    let (bs,_) = decode $ C8.pack "6060604052341561000f57600080fd5b60ba8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063771602f7146044575b600080fd5b3415604e57600080fd5b606b60048080359060200190919080359060200190919050506081565b6040518082815260200191505060405180910390f35b60008183019050929150505600a165627a7a72305820208e94342b2b01f28a6a3e363d85bb930b900adbc78c5ac5c926c3c316c993840029"
-    -- let (bs,_) = decode $ C8.pack "6060605f"
-    --     bs2  = pack [0x60,0x60,0x60,0x5f]
-    -- assertBool "The two bytestrings are not equal" (bs == bs2)
-    case parseOnly (parseOpCodes) bs of
-        Left e -> do
-            print e
+    let (bs,_) = decode $ C8.pack "6060604052341561000f57600080fd5b60ba8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063771602f7146044575b600080fd5b3415604e57600080fd5b606b60048080359060200190919080359060200190919050506081565b6040518082815260200191505060405180910390f35b60008183019050929150505600a165627a7a723058203691f76bc66e6d69f31bbfe2298197772c0c4c64b8eaefe9eec731a4e91fc1a50029"
+    case parse (parseOpCodes <* endOfInput) bs of
+        Fail i contexts err -> do
+            print (encode i)
             assertFailure $ "Opcodes should be parsed in full"
-        Right ocs -> do
+        Done i ocs -> do
             mapM_ print ocs
             pure ()
+
+parserTests = TestLabel "OpCode Parser" $ TestList $
+    [ TestLabel "Should Parse Empty Code" $ TestCase $ do
+        undefined
+    , TestLabel "Should All Single Valid OpCodes" $ TestCase $ do
+        undefined
+    , TestLabel "Should Reject Single Invalid OpCodes" $ TestCase $ do
+        undefined
+    , TestLabel "Should Parse Simple Hand-Written Samples" $ TestCase $ do
+        undefined
+    , TestLabel "Should Parse Compiled Examples" $ TestList $
+        [ TestLabel "Should Parse \"Storer\"" $ TestCase $ do
+            undefined
+        , TestLabel "Should Parse \"Adder\"" $ TestCase $ do
+            undefined
+        ]
+    ]
+
+jumpCheckerTests = TestLabel "Jump Checker" $ TestList $
+    [ TestLabel "Should Accept Empty Code" $ TestCase $ do
+        undefined
+    , TestLabel "Should Accept Code Without Jumps" $ TestCase $ do
+        undefined
+    , TestLabel "Should Accept Code With Any Invalid Jumps" $ TestCase $ do
+        undefined
+    , TestLabel "Should Accept Code With Only Valid Jumps" $ TestCase $ do
+        undefined
+    ]
+
+-- preprocessorTests = TestLabel "Preprocessor" $ TestList $
+--     [ TestLabel "Passthrough" $ TestList $
+--         [ shouldRejectInvalidCode
+--         , validCodeShouldRemainUnchanged
+--         ]
+--     , TestLabel "Append OpCodes" $ TestList $
+--         [ theCodeShouldBeValid
+--         , lengthOfCodeShouldIncrease
+--         , theOpCodesShouldBeAppended
+--         , theJumpsShouldBeValid
+--         -- , theJumpsDestinationsShouldBeMaintained
+--         ]
+--     , TestLabel "Insert OpCodes" $ TestList $
+--         [ theCodeShouldBeValid
+--         , lengthOfCodeShouldIncrease
+--         , theOpCodesShouldBeInserted
+--         , theJumpsShouldBeValid
+--         -- , theJumpsDestinationsShouldBeMaintained
+--         ]
+--     , TestLabel "Remove OpCodes" $ TestList $
+--         [ theCodeShouldBeValid
+--         , lengthOfCodeShouldDecrease
+--         , theOpCodesShouldBeRemoved
+--         , theJumpsShouldBeValid
+--         -- , theJumpsDestinationsShouldBeMaintained
+--         ]
+--     , TestLabel "Insert and Remove Opcodes" $ TestList $
+--         [ theCodeShouldBeValid
+--         , lengthOfCodeShouldDecrease
+--         , theOpCodesShouldBeRemoved
+--         , theJumpsShouldBeValid
+--         -- , theJumpsDestinationsShouldBeMaintained
+--         ]
+--     ]
+
