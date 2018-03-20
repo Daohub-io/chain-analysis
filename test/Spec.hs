@@ -2,7 +2,7 @@ module Main where
 
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
--- import qualified Data.ByteString.Char8 as C8 (pack)
+import qualified Data.ByteString.Char8 as C8 (pack)
 import Data.ByteString.Base16
 import Data.Maybe
 import Data.Monoid (mempty)
@@ -57,6 +57,7 @@ tests =
 singleOpCodes = TestLabel "SingleOpCodes" $ TestList
     [ parseSTOPTest
     , parseSTOPTestNot
+    , testExampleContract
     ]
 
 parseSTOPTest = TestLabel "Parse STOP OpCode" $ TestCase $ do
@@ -72,6 +73,13 @@ parseSTOPTestNot = TestLabel "Parse STOP OpCode Not" $ TestCase $ do
 
 testExampleContract = TestLabel "Parse Example Contract" $ TestCase $ do
     let (bs,_) = decode $ C8.pack "6060604052341561000f57600080fd5b60ba8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063771602f7146044575b600080fd5b3415604e57600080fd5b606b60048080359060200190919080359060200190919050506081565b6040518082815260200191505060405180910390f35b60008183019050929150505600a165627a7a72305820208e94342b2b01f28a6a3e363d85bb930b900adbc78c5ac5c926c3c316c993840029"
-    case parseOnly (parseOpCodes <* endOfInput) (pack [0x01]) of
-        Left _ -> assertFailure $ "Opcodes should be parsed in fulle"
-        Right ocs -> pure ()
+    -- let (bs,_) = decode $ C8.pack "6060605f"
+    --     bs2  = pack [0x60,0x60,0x60,0x5f]
+    -- assertBool "The two bytestrings are not equal" (bs == bs2)
+    case parseOnly (parseOpCodes) bs of
+        Left e -> do
+            print e
+            assertFailure $ "Opcodes should be parsed in full"
+        Right ocs -> do
+            mapM_ print ocs
+            pure ()
