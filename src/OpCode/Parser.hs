@@ -5,6 +5,7 @@ import OpCode.Type
 import Prelude hiding (LT, EQ, GT)
 
 import Control.Applicative
+import Data.ByteString (pack)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import Data.Attoparsec.ByteString as A
@@ -227,38 +228,38 @@ parseMSIZE = word8 0x59 >> pure MSIZE
 parseGAS = word8 0x5a >> pure GAS
 parseJUMPDEST = word8 0x5b >> pure JUMPDEST
 
-parsePUSH1 = word8 0x60 >> PUSH1 <$> anyWord8
-parsePUSH2 = word8 0x61 >> PUSH2 <$> anyWord8 <*> anyWord8
-parsePUSH3 = word8 0x62 >> PUSH3 <$> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH4 = word8 0x63 >> PUSH4 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH5 = word8 0x64 >> PUSH5 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH6 = word8 0x65 >> PUSH6 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH7 = word8 0x66 >> PUSH7 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH8 = word8 0x67 >> PUSH8 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH9 = word8 0x68 >> PUSH9 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH10 = word8 0x69 >> PUSH10 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH11 = word8 0x6a >> PUSH11 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH12 = word8 0x6b >> PUSH12 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH13 = word8 0x6c >> PUSH13 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH14 = word8 0x6d >> PUSH14 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH15 = word8 0x6e >> PUSH15 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH16 = word8 0x6f >> PUSH16 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH17 = word8 0x70 >> PUSH17 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH18 = word8 0x71 >> PUSH18 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH19 = word8 0x72 >> PUSH19 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH20 = word8 0x73 >> PUSH20 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH21 = word8 0x74 >> PUSH21 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH22 = word8 0x75 >> PUSH22 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH23 = word8 0x76 >> PUSH23 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH24 = word8 0x77 >> PUSH24 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH25 = word8 0x78 >> PUSH25 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH26 = word8 0x79 >> PUSH26 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH27 = word8 0x7a >> PUSH27 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH28 = word8 0x7b >> PUSH28 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH29 = word8 0x7c >> PUSH29 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH30 = word8 0x7d >> PUSH30 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH31 = word8 0x7e >> PUSH31 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
-parsePUSH32 = word8 0x7f >> PUSH32 <$> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8 <*> anyWord8
+parsePUSH1 = word8 0x60 >> PUSH1 <$> (fmap pack $ count 1 anyWord8)
+parsePUSH2 = word8 0x61 >> PUSH2 <$> (fmap pack $ count 2 anyWord8)
+parsePUSH3 = word8 0x62 >> PUSH3 <$> (fmap pack $ count 3 anyWord8)
+parsePUSH4 = word8 0x63 >> PUSH4 <$> (fmap pack $ count 4 anyWord8)
+parsePUSH5 = word8 0x64 >> PUSH5 <$> (fmap pack $ count 5 anyWord8)
+parsePUSH6 = word8 0x65 >> PUSH6 <$> (fmap pack $ count 6 anyWord8)
+parsePUSH7 = word8 0x66 >> PUSH7 <$> (fmap pack $ count 7 anyWord8)
+parsePUSH8 = word8 0x67 >> PUSH8 <$> (fmap pack $ count 8 anyWord8)
+parsePUSH9 = word8 0x68 >> PUSH9 <$> (fmap pack $ count 9 anyWord8)
+parsePUSH10 = word8 0x69 >> PUSH10 <$> (fmap pack $ count 10 anyWord8)
+parsePUSH11 = word8 0x6a >> PUSH11 <$> (fmap pack $ count 11 anyWord8)
+parsePUSH12 = word8 0x6b >> PUSH12 <$> (fmap pack $ count 12 anyWord8)
+parsePUSH13 = word8 0x6c >> PUSH13 <$> (fmap pack $ count 13 anyWord8)
+parsePUSH14 = word8 0x6d >> PUSH14 <$> (fmap pack $ count 14 anyWord8)
+parsePUSH15 = word8 0x6e >> PUSH15 <$> (fmap pack $ count 15 anyWord8)
+parsePUSH16 = word8 0x6f >> PUSH16 <$> (fmap pack $ count 16 anyWord8)
+parsePUSH17 = word8 0x70 >> PUSH17 <$> (fmap pack $ count 17 anyWord8)
+parsePUSH18 = word8 0x71 >> PUSH18 <$> (fmap pack $ count 18 anyWord8)
+parsePUSH19 = word8 0x72 >> PUSH19 <$> (fmap pack $ count 19 anyWord8)
+parsePUSH20 = word8 0x73 >> PUSH20 <$> (fmap pack $ count 20 anyWord8)
+parsePUSH21 = word8 0x74 >> PUSH21 <$> (fmap pack $ count 21 anyWord8)
+parsePUSH22 = word8 0x75 >> PUSH22 <$> (fmap pack $ count 22 anyWord8)
+parsePUSH23 = word8 0x76 >> PUSH23 <$> (fmap pack $ count 23 anyWord8)
+parsePUSH24 = word8 0x77 >> PUSH24 <$> (fmap pack $ count 24 anyWord8)
+parsePUSH25 = word8 0x78 >> PUSH25 <$> (fmap pack $ count 25 anyWord8)
+parsePUSH26 = word8 0x79 >> PUSH26 <$> (fmap pack $ count 26 anyWord8)
+parsePUSH27 = word8 0x7a >> PUSH27 <$> (fmap pack $ count 27 anyWord8)
+parsePUSH28 = word8 0x7b >> PUSH28 <$> (fmap pack $ count 28 anyWord8)
+parsePUSH29 = word8 0x7c >> PUSH29 <$> (fmap pack $ count 29 anyWord8)
+parsePUSH30 = word8 0x7d >> PUSH30 <$> (fmap pack $ count 30 anyWord8)
+parsePUSH31 = word8 0x7e >> PUSH31 <$> (fmap pack $ count 31 anyWord8)
+parsePUSH32 = word8 0x7f >> PUSH32 <$> (fmap pack $ count 32 anyWord8)
 
 parseDUP1 = word8 0x80 >> pure DUP1
 parseDUP2 = word8 0x81 >> pure DUP2

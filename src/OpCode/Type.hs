@@ -3,8 +3,8 @@ module OpCode.Type where
 import Prelude hiding (LT, EQ, GT)
 
 import Control.Applicative
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as C8
+import Data.ByteString
+-- import qualified Data.ByteString.Char8 as C8
 import Data.Attoparsec.ByteString as A
 -- import Data.Attoparsec.Binary
 import Data.Char (isSpace)
@@ -74,38 +74,38 @@ data OpCode
     | MSIZE
     | GAS
     | JUMPDEST
-    | PUSH1 Word8
-    | PUSH2 Word8 Word8
-    | PUSH3 Word8 Word8 Word8
-    | PUSH4 Word8 Word8 Word8 Word8
-    | PUSH5 Word8 Word8 Word8 Word8 Word8
-    | PUSH6 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH7 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH9 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH10 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH11 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH12 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH13 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH14 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH15 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH16 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH17 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH18 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH19 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH20 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH21 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH22 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH23 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH24 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH25 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH26 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH27 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH28 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH29 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH30 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH31 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
-    | PUSH32 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8 Word8
+    | PUSH1 ByteString
+    | PUSH2 ByteString
+    | PUSH3 ByteString
+    | PUSH4 ByteString
+    | PUSH5 ByteString
+    | PUSH6 ByteString
+    | PUSH7 ByteString
+    | PUSH8 ByteString
+    | PUSH9 ByteString
+    | PUSH10 ByteString
+    | PUSH11 ByteString
+    | PUSH12 ByteString
+    | PUSH13 ByteString
+    | PUSH14 ByteString
+    | PUSH15 ByteString
+    | PUSH16 ByteString
+    | PUSH17 ByteString
+    | PUSH18 ByteString
+    | PUSH19 ByteString
+    | PUSH20 ByteString
+    | PUSH21 ByteString
+    | PUSH22 ByteString
+    | PUSH23 ByteString
+    | PUSH24 ByteString
+    | PUSH25 ByteString
+    | PUSH26 ByteString
+    | PUSH27 ByteString
+    | PUSH28 ByteString
+    | PUSH29 ByteString
+    | PUSH30 ByteString
+    | PUSH31 ByteString
+    | PUSH32 ByteString
     | DUP1
     | DUP2
     | DUP3
@@ -293,35 +293,35 @@ instance Arbitrary OpCode where
         , pure SELFDESTRUCT
         ]
 
-arbitraryPUSH1  = PUSH1  <$> arbitrary
-arbitraryPUSH2  = PUSH2  <$> arbitrary <*> arbitrary
-arbitraryPUSH3  = PUSH3  <$> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH4  = PUSH4  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH5  = PUSH5  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH6  = PUSH6  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH7  = PUSH7  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH8  = PUSH8  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH9  = PUSH9  <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH10 = PUSH10 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH11 = PUSH11 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH12 = PUSH12 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH13 = PUSH13 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH14 = PUSH14 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH15 = PUSH15 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH16 = PUSH16 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH17 = PUSH17 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH18 = PUSH18 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH19 = PUSH19 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH20 = PUSH20 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH21 = PUSH21 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH22 = PUSH22 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH23 = PUSH23 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH24 = PUSH24 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH25 = PUSH25 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH26 = PUSH26 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH27 = PUSH27 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH28 = PUSH28 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH29 = PUSH29 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH30 = PUSH30 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH31 = PUSH31 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
-arbitraryPUSH32 = PUSH32 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+arbitraryPUSH1  = PUSH1  <$> (fmap pack $ replicateM 1 arbitrary)
+arbitraryPUSH2  = PUSH2  <$> (fmap pack $ replicateM  2 arbitrary)
+arbitraryPUSH3  = PUSH3  <$> (fmap pack $ replicateM  3 arbitrary)
+arbitraryPUSH4  = PUSH4  <$> (fmap pack $ replicateM  4 arbitrary)
+arbitraryPUSH5  = PUSH5  <$> (fmap pack $ replicateM  5 arbitrary)
+arbitraryPUSH6  = PUSH6  <$> (fmap pack $ replicateM  6 arbitrary)
+arbitraryPUSH7  = PUSH7  <$> (fmap pack $ replicateM  7 arbitrary)
+arbitraryPUSH8  = PUSH8  <$> (fmap pack $ replicateM  8 arbitrary)
+arbitraryPUSH9  = PUSH9  <$> (fmap pack $ replicateM  9 arbitrary)
+arbitraryPUSH10 = PUSH10 <$> (fmap pack $ replicateM 10 arbitrary)
+arbitraryPUSH11 = PUSH11 <$> (fmap pack $ replicateM 11 arbitrary)
+arbitraryPUSH12 = PUSH12 <$> (fmap pack $ replicateM 12 arbitrary)
+arbitraryPUSH13 = PUSH13 <$> (fmap pack $ replicateM 13 arbitrary)
+arbitraryPUSH14 = PUSH14 <$> (fmap pack $ replicateM 14 arbitrary)
+arbitraryPUSH15 = PUSH15 <$> (fmap pack $ replicateM 15 arbitrary)
+arbitraryPUSH16 = PUSH16 <$> (fmap pack $ replicateM 16 arbitrary)
+arbitraryPUSH17 = PUSH17 <$> (fmap pack $ replicateM 17 arbitrary)
+arbitraryPUSH18 = PUSH18 <$> (fmap pack $ replicateM 18 arbitrary)
+arbitraryPUSH19 = PUSH19 <$> (fmap pack $ replicateM 19 arbitrary)
+arbitraryPUSH20 = PUSH20 <$> (fmap pack $ replicateM 20 arbitrary)
+arbitraryPUSH21 = PUSH21 <$> (fmap pack $ replicateM 21 arbitrary)
+arbitraryPUSH22 = PUSH22 <$> (fmap pack $ replicateM 22 arbitrary)
+arbitraryPUSH23 = PUSH23 <$> (fmap pack $ replicateM 23 arbitrary)
+arbitraryPUSH24 = PUSH24 <$> (fmap pack $ replicateM 24 arbitrary)
+arbitraryPUSH25 = PUSH25 <$> (fmap pack $ replicateM 25 arbitrary)
+arbitraryPUSH26 = PUSH26 <$> (fmap pack $ replicateM 26 arbitrary)
+arbitraryPUSH27 = PUSH27 <$> (fmap pack $ replicateM 27 arbitrary)
+arbitraryPUSH28 = PUSH28 <$> (fmap pack $ replicateM 28 arbitrary)
+arbitraryPUSH29 = PUSH29 <$> (fmap pack $ replicateM 29 arbitrary)
+arbitraryPUSH30 = PUSH30 <$> (fmap pack $ replicateM 30 arbitrary)
+arbitraryPUSH31 = PUSH31 <$> (fmap pack $ replicateM 31 arbitrary)
+arbitraryPUSH32 = PUSH32 <$> (fmap pack $ replicateM 32 arbitrary)
