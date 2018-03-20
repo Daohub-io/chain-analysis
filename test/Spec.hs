@@ -2,7 +2,7 @@ module Main where
 
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
-import qualified Data.ByteString.Char8 as C8 (pack)
+-- import qualified Data.ByteString.Char8 as C8 (pack)
 import Data.ByteString.Base16
 import Data.Maybe
 import Data.Monoid (mempty)
@@ -53,7 +53,7 @@ tests =
     -- , testProperty "leftOrRight Order"  prop_leftOrRight_order
     ]
 
--- |Parse each of the opcodes individually.
+-- Parse each of the opcodes individually.
 singleOpCodes = TestLabel "SingleOpCodes" $ TestList
     [ parseSTOPTest
     , parseSTOPTestNot
@@ -64,7 +64,7 @@ parseSTOPTest = TestLabel "Parse STOP OpCode" $ TestCase $ do
     case res of
         Right STOP -> pure ()
         _ -> assertFailure $ "STOP should be parsed, but was not"
--- |Parse something that is not the STOP OpCode
+-- Parse something that is not the STOP OpCode
 parseSTOPTestNot = TestLabel "Parse STOP OpCode Not" $ TestCase $ do
     case parseOnly (parseSTOP <* endOfInput) (pack [0x01]) of
         Left _ -> pure ()
