@@ -64,5 +64,6 @@ test-suite evm-mod-test
     , test-framework-hunit
     , test-framework-quickcheck2
   other-modules:
-      Paths_evm_mod
+      Paths_evm_mod,
+      Models.HandWritten
   default-language: Haskell2010

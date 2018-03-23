@@ -178,7 +178,7 @@ parseMULMOD = word8 0x09 >> pure MULMOD
 parseEXP = word8 0x0a >> pure EXP
 parseSIGNEXTEND = word8 0x0b >> pure SIGNEXTEND
 
-parseLT = word8 0x10 >> pure LT
+parseLT = word8 0x10 >> pure LT <?>  "LT"
 parseGT = word8 0x11 >> pure GT
 parseSLT = word8 0x12 >> pure SLT
 parseSGT = word8 0x13 >> pure SGT

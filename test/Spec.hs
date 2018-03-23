@@ -1,7 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8 (pack)
 import Data.ByteString.Base16
 import Data.Maybe
@@ -22,6 +24,7 @@ import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
 import JumpChecker
+import Models.HandWritten
 
 import Data.List
 
@@ -52,8 +55,9 @@ mainWithOpts = do
     defaultMainWithOpts tests my_runner_opts
 
 tests =
-    [ testGroup "OpCodes" $ (hUnitTestToTests singleOpCodes)
-    -- , testGroup "Conversion" $ (hUnitTestToTests conversionTests)
+    [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
+    -- , testGroup Jump Checker" $ (hUnitTestToTests jumpCheckerTests)
+    -- , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     ]
 
@@ -84,6 +88,10 @@ singleOpCodes = TestLabel "SingleOpCodes" $ TestList
 
     ]
 
+antiSingleOpCodes = TestLabel "AntiSingleOpCodes" $ TestList
+    [ antiSingleParseTest (pack [0x1b])
+    ]
+
 singleParseTest parser target unparsed = TestLabel ("Parse " ++ show target ++ " OpCode") $ TestCase $ do
     case parseOnly (parser <* endOfInput) unparsed of
         Left err -> assertFailure $ "Opcodes should be parsed in full: " ++ err
@@ -94,6 +102,29 @@ singleParseTest parser target unparsed = TestLabel ("Parse " ++ show target ++ "
         Left err -> pure ()
         Right parsed -> assertBool "parsed and target should not be equal" (parsed /= target)
 
+antiSingleParseTest bytecode = TestLabel ("Parse unknown bytecode " ++ show (encode bytecode)) $ TestCase $ do
+    case parseOnly (parseOpCode <* endOfInput) bytecode of
+        Left err -> pure ()
+        Right parsed -> assertFailure $ "Bytecode should not be successfully parsed: " ++ show parsed
+
+parseGoodExampleTest bytecode = TestLabel "Parse Good Example" $ TestCase
+    $ parseGoodExample bytecode
+
+-- parseGoodExample bytecode =
+--     case parseOnly (parseOpCodes <* endOfInput) bytecode of
+--         Left err -> assertFailure $ "Opcodes should be parsed in full: " ++ err
+--         Right parsed -> pure ()
+
+parseGoodExample bytecode =
+    case parse (parseOpCodes <* endOfInput) bytecode `feed` "" of
+        Fail i contexts err -> assertFailure $ "Opcodes should be parsed in full: " ++ show contexts ++ " " ++ err ++ " remaining: " ++ show (encode i)
+        Partial f -> error $ show (f "")
+        Done i r -> pure ()
+
+parseBadExampleTest bytecode = TestLabel "Parse Bad Example" $ TestCase $ do
+    case parseOnly (parseOpCodes <* endOfInput) bytecode of
+        Left err -> pure ()
+        Right parsed -> assertFailure $ "Opcodes should not be parsed : " ++ show parsed
 
 -- Parse something that is not the STOP OpCode
 parseSTOPTestNot = TestLabel "Parse STOP OpCode Not" $ TestCase $ do
@@ -112,18 +143,31 @@ testExampleContract = TestLabel "Parse Example Contract" $ TestCase $ do
 
 parserTests = TestLabel "OpCode Parser" $ TestList $
     [ TestLabel "Should Parse Empty Code" $ TestCase $ do
-        undefined
-    , TestLabel "Should All Single Valid OpCodes" $ TestCase $ do
-        undefined
-    , TestLabel "Should Reject Single Invalid OpCodes" $ TestCase $ do
-        undefined
-    , TestLabel "Should Parse Simple Hand-Written Samples" $ TestCase $ do
-        undefined
+        let (bytecode,_) = decode $ C8.pack ""
+        case parseOnly (parseOpCodes <* endOfInput) bytecode of
+            Left err -> assertFailure $ "Opcodes should be parsed in full: " ++ err
+            Right parsed -> assertEqual "parsed and target should be equal" parsed []
+    , TestLabel "Should All Single Valid OpCodes" singleOpCodes
+    , TestLabel "Should Reject Single Invalid OpCodes" antiSingleOpCodes
+    , TestLabel "Should Parse Simple Hand-Written Samples" $ TestList
+        [ TestLabel "Should Parse Good Examples" $ TestList $
+            map parseGoodExampleTest hwsPass
+        , TestLabel "Should Not Parse Bad Examples" $ TestList $
+            map parseBadExampleTest hwsFail
+        ]
     , TestLabel "Should Parse Compiled Examples" $ TestList $
         [ TestLabel "Should Parse \"Storer\"" $ TestCase $ do
-            undefined
+            -- Read in the test data file
+            bsEncoded <- B.readFile "test/Models/Storer.dat"
+            -- Decode the hex string from the file
+            let (bsDecoded,"") = decode bsEncoded
+            parseGoodExample bsDecoded
         , TestLabel "Should Parse \"Adder\"" $ TestCase $ do
-            undefined
+            -- Read in the test data file
+            bsEncoded <- B.readFile "test/Models/Adder.dat"
+            -- Decode the hex string from the file
+            let (bsDecoded,"") = decode bsEncoded
+            parseGoodExample bsDecoded
         ]
     ]
 
@@ -138,38 +182,58 @@ jumpCheckerTests = TestLabel "Jump Checker" $ TestList $
         undefined
     ]
 
--- preprocessorTests = TestLabel "Preprocessor" $ TestList $
---     [ TestLabel "Passthrough" $ TestList $
---         [ shouldRejectInvalidCode
---         , validCodeShouldRemainUnchanged
---         ]
---     , TestLabel "Append OpCodes" $ TestList $
---         [ theCodeShouldBeValid
---         , lengthOfCodeShouldIncrease
---         , theOpCodesShouldBeAppended
---         , theJumpsShouldBeValid
---         -- , theJumpsDestinationsShouldBeMaintained
---         ]
---     , TestLabel "Insert OpCodes" $ TestList $
---         [ theCodeShouldBeValid
---         , lengthOfCodeShouldIncrease
---         , theOpCodesShouldBeInserted
---         , theJumpsShouldBeValid
---         -- , theJumpsDestinationsShouldBeMaintained
---         ]
---     , TestLabel "Remove OpCodes" $ TestList $
---         [ theCodeShouldBeValid
---         , lengthOfCodeShouldDecrease
---         , theOpCodesShouldBeRemoved
---         , theJumpsShouldBeValid
---         -- , theJumpsDestinationsShouldBeMaintained
---         ]
---     , TestLabel "Insert and Remove Opcodes" $ TestList $
---         [ theCodeShouldBeValid
---         , lengthOfCodeShouldDecrease
---         , theOpCodesShouldBeRemoved
---         , theJumpsShouldBeValid
---         -- , theJumpsDestinationsShouldBeMaintained
---         ]
---     ]
+preprocessorTests = TestLabel "Preprocessor" $ TestList $
+    [ TestLabel "Passthrough" $ TestList $
+        [ TestLabel "Should Reject Invalid Code" $ TestCase $ do
+            undefined
+        , TestLabel "Should Leave Valid Code Unchanged" $ TestCase $ do
+            undefined
+        ]
+    , TestLabel "Append OpCodes" $ TestList $
+        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code of Increased Length" $ TestCase $ do
+            undefined
+        , TestLabel "Should Append the OpCodes" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+            undefined
+        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+            undefined
+        ]
+    , TestLabel "Insert OpCodes" $ TestList $
+        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code of Increased Length" $ TestCase $ do
+            undefined
+        , TestLabel "Should Insert the OpCodes (Correct Location)" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+            undefined
+        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+            undefined
+        ]
+    , TestLabel "Remove OpCodes" $ TestList $
+        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code of Decreased Length" $ TestCase $ do
+            undefined
+        , TestLabel "Should Remove the OpCodes (Correct Location)" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+            undefined
+        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+            undefined
+        ]
+    , TestLabel "Insert and Remove Opcodes" $ TestList $
+        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+            undefined
+        , TestLabel "Should Effect the Correct Changes" $ TestCase $ do
+            undefined
+        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+            undefined
+        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+            undefined
+        ]
+    ]
 
