@@ -21,13 +21,14 @@ library
   build-depends:
       base >=4.7 && <5
       , bytestring
+      , base16-bytestring
       , attoparsec
       , QuickCheck
   exposed-modules:
       OpCode.Exporter,
       OpCode.Parser,
       OpCode.Type,
-      JumpChecker
+      Process
   other-modules:
       Paths_evm_mod
   default-language: Haskell2010

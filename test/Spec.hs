@@ -23,7 +23,6 @@ import Test.HUnit
 import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
-import JumpChecker
 import Models.HandWritten
 
 import Data.List
@@ -56,9 +55,9 @@ mainWithOpts = do
 
 tests =
     [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
-    -- , testGroup Jump Checker" $ (hUnitTestToTests jumpCheckerTests)
     -- , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
+    , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
     ]
 
 prop_anyValidOpCode_roundTrip :: OpCode -> Bool
@@ -69,6 +68,15 @@ prop_anyValidOpCode_roundTrip opCode =
         Fail i contexts err -> False
         -- Partial _ ->
         Done i oc -> True
+
+prop_anyValidBytecode_roundTrip :: [OpCode] -> Bool
+prop_anyValidBytecode_roundTrip bytecode =
+    let bs = B.concat $ map toByteString bytecode
+        parseResult = parse parseOpCodes bs
+    in case parse (parseOpCodes <* endOfInput) bs `feed` "" of
+            Fail i contexts err -> False
+            Partial f -> error $ "impossible error"
+            Done i r -> True
 
 -- Parse each of the opcodes individually.
 -- TODO: finish this list.
@@ -180,17 +188,6 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
             let (bsDecoded,"") = decode bsEncoded
             parseGoodExample bsDecoded >> pure ()
         ]
-    ]
-
-jumpCheckerTests = TestLabel "Jump Checker" $ TestList $
-    [ TestLabel "Should Accept Empty Code" $ TestCase $ do
-        undefined
-    , TestLabel "Should Accept Code Without Jumps" $ TestCase $ do
-        undefined
-    , TestLabel "Should Accept Code With Any Invalid Jumps" $ TestCase $ do
-        undefined
-    , TestLabel "Should Accept Code With Only Valid Jumps" $ TestCase $ do
-        undefined
     ]
 
 preprocessorTests = TestLabel "Preprocessor" $ TestList $

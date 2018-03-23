@@ -4,7 +4,8 @@ import Prelude hiding (LT, EQ, GT)
 
 import Control.Applicative
 import Data.ByteString
--- import qualified Data.ByteString.Char8 as C8
+import Data.ByteString.Base16 (encode)
+import qualified Data.ByteString.Char8 as C8
 import Data.Attoparsec.ByteString as A
 -- import Data.Attoparsec.Binary
 import Data.Char (isSpace)
