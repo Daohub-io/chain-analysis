@@ -108,7 +108,7 @@ antiSingleParseTest bytecode = TestLabel ("Parse unknown bytecode " ++ show (enc
         Right parsed -> assertFailure $ "Bytecode should not be successfully parsed: " ++ show parsed
 
 parseGoodExampleTest bytecode = TestLabel "Parse Good Example" $ TestCase
-    $ parseGoodExample bytecode
+    $ (parseGoodExample bytecode >> pure ())
 
 -- parseGoodExample bytecode =
 --     case parseOnly (parseOpCodes <* endOfInput) bytecode of
@@ -119,7 +119,7 @@ parseGoodExample bytecode =
     case parse (parseOpCodes <* endOfInput) bytecode `feed` "" of
         Fail i contexts err -> assertFailure $ "Opcodes should be parsed in full: " ++ show contexts ++ " " ++ err ++ " remaining: " ++ show (encode i)
         Partial f -> error $ show (f "")
-        Done i r -> pure ()
+        Done i r -> pure r
 
 parseBadExampleTest bytecode = TestLabel "Parse Bad Example" $ TestCase $ do
     case parseOnly (parseOpCodes <* endOfInput) bytecode of
@@ -149,6 +149,11 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
             Right parsed -> assertEqual "parsed and target should be equal" parsed []
     , TestLabel "Should All Single Valid OpCodes" singleOpCodes
     , TestLabel "Should Reject Single Invalid OpCodes" antiSingleOpCodes
+    , TestLabel "Should Parse Swarm Metadata" $ TestCase $ do
+        let (bytecode,_) = decode "a165627a7a723058203691f76bc66e6d69f31bbfe2298197772c0c4c64b8eaefe9eec731a4e91fc1a50029"
+        case parseOnly (parseSwarmMetadata <* endOfInput) bytecode of
+            Left err -> assertFailure $ "Opcodes should be parsed in full: " ++ err
+            Right parsed -> assertEqual "parsed and target should be equal" parsed ()
     , TestLabel "Should Parse Simple Hand-Written Samples" $ TestList
         [ TestLabel "Should Parse Good Examples" $ TestList $
             map parseGoodExampleTest hwsPass
@@ -161,13 +166,19 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
             bsEncoded <- B.readFile "test/Models/Storer.dat"
             -- Decode the hex string from the file
             let (bsDecoded,"") = decode bsEncoded
-            parseGoodExample bsDecoded
+            parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\"" $ TestCase $ do
             -- Read in the test data file
             bsEncoded <- B.readFile "test/Models/Adder.dat"
             -- Decode the hex string from the file
             let (bsDecoded,"") = decode bsEncoded
-            parseGoodExample bsDecoded
+            parseGoodExample bsDecoded >> pure ()
+        , TestLabel "Should Parse \"Adder\" Without Swarm Metadata" $ TestCase $ do
+            -- Read in the test data file
+            bsEncoded <- B.readFile "test/Models/AdderWithoutSwarmMetadata.dat"
+            -- Decode the hex string from the file
+            let (bsDecoded,"") = decode bsEncoded
+            parseGoodExample bsDecoded >> pure ()
         ]
     ]
 

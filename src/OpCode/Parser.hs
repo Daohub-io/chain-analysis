@@ -20,7 +20,7 @@ import Control.Monad
 import Test.QuickCheck
 
 parseOpCodes :: Parser [OpCode]
-parseOpCodes = many parseOpCode
+parseOpCodes = manyTill parseOpCode (parseSwarmMetadata  <|> endOfInput)
 
 parseOpCode :: Parser OpCode
 parseOpCode = choice opCodeParserList
@@ -309,3 +309,21 @@ parseSTATICCALL = word8 0xfa >> pure STATICCALL
 parseREVERT = word8 0xfd >> pure REVERT
 parseINVALID = word8 0xfe >> pure INVALID
 parseSELFDESTRUCT = word8 0xff >> pure SELFDESTRUCT
+
+-- |Parse the Swarm metadata
+-- http://solidity.readthedocs.io/en/v0.4.21/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode
+parseSwarmMetadata = do
+    word8 0xa1
+    word8 0x65
+    word8 0x62
+    word8 0x7a
+    word8 0x7a
+    word8 0x72
+    word8 0x30
+    word8 0x58
+    word8 0x20
+    count 32 anyWord8
+    word8 0x00
+    word8 0x29
+    pure ()
+    <?> "swarm metadata"
