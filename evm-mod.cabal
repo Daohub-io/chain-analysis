@@ -28,6 +28,7 @@ library
       OpCode.Exporter,
       OpCode.Parser,
       OpCode.Type,
+      Check.Stores,
       Process
   other-modules:
       Paths_evm_mod

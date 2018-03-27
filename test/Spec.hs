@@ -20,6 +20,7 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck
 import Test.HUnit
 
+import Check.Stores
 import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
@@ -56,6 +57,7 @@ mainWithOpts = do
 tests =
     [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
     -- , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
+    , testGroup "Checks" $ (hUnitTestToTests storeCheckerTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
     ]
@@ -187,6 +189,55 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
             -- Decode the hex string from the file
             let (bsDecoded,"") = decode bsEncoded
             parseGoodExample bsDecoded >> pure ()
+        ]
+    ]
+
+storeCheckerTests = TestLabel "Store Checker" $ TestList $
+    [ TestLabel "Should Pass Empty Code" $ TestCase $ do
+        assertBool "Empty bytecode should pass store checker" (checkStores [])
+    , TestLabel "Should Pass Code Without SSTORE calls" $ TestList
+        [ TestLabel "Trivial Example" $ TestCase $ do
+            assertBool "Calls without should pass store checker" (checkStores [PUSH1 (pack [0x4]), POP])
+        , TestLabel "\"Adder\"" $ TestCase $ do
+            -- Read in the test data file
+            bsEncoded <- B.readFile "test/Models/Adder.dat"
+            -- Decode the hex string from the file
+            let (bsDecoded,"") = decode bsEncoded
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls without should pass store checker" (checkStores code)
+        ]
+    , TestLabel "Should Reject Code With unprotected SSTORE calls" $ TestList
+        [ TestLabel "Trivial Example" $ TestCase $ do
+            let code = [PUSH1 (pack [0x4]), PUSH1 (pack [0x0]), SSTORE]
+            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+        , TestLabel "\"Storer\"" $ TestCase $ do
+            -- Read in the test data file
+            bsEncoded <- B.readFile "test/Models/Storer.dat"
+            -- Decode the hex string from the file
+            let (bsDecoded,"") = decode bsEncoded
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+        ]
+    , TestLabel "Should Pass Code With protected SSTORE calls" $ TestList
+        [ TestLabel "Trivial Example" $ TestCase $ do
+            let code =
+                    [ PUSH2 (pack [0x92, 0x93])
+                    , PUSH32 (pack [0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                    , PUSH1 (pack [0x64])
+                    , PUSH1 (pack [0x40])
+                    , MLOAD
+                    , MSTORE
+                    , SSTORE
+                    ]
+            assertBool "Protected stored calls should pass store checker" (checkStores code)
+        , TestLabel "\"StoreProtetected\"" $ TestCase $ do
+            -- Read in the test data file
+            bsEncoded <- B.readFile "test/Models/Protection/StorerProtected.dat"
+            -- Decode the hex string from the file
+            let (bsDecoded,"") = decode bsEncoded
+            code <- parseGoodExample bsDecoded
+            print code
+            assertBool "Protected stored calls should pass store checker" (checkStores code)
         ]
     ]
 
