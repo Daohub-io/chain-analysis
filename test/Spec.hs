@@ -204,6 +204,11 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls without should pass store checker" (checkStores code)
+        , TestLabel "\"Fib\"" $ TestCase $ do
+            -- Read in the test data file
+            bsDecoded <- compileSolidityFile "test/Models/Fib.sol"
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls without should pass store checker" (checkStores code)
         ]
     , TestLabel "Should Reject Code With unprotected SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
