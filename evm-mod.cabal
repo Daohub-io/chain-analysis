@@ -20,6 +20,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+      , binary
       , bytestring
       , base16-bytestring
       , attoparsec
@@ -28,6 +29,7 @@ library
       OpCode.Exporter,
       OpCode.Parser,
       OpCode.Type,
+      OpCode.Utils,
       Check.Stores,
       Process
   other-modules:

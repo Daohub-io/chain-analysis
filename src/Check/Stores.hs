@@ -28,3 +28,29 @@ hasSSTORE :: [OpCode] -> Bool
 hasSSTORE (SSTORE:cs) = True
 hasSSTORE (_:cs) = hasSSTORE cs
 hasSSTORE [] = False
+
+-- protectedStoreSequence startLocation lowerLimit upperLimit =
+--     [ PUSH32 storeProcEnd
+--     , JUMP -- rudimentary storage protection
+--     , JUMPDEST -- storeProc
+--     , SWAP1
+--     , PUSH32 lowerLimit
+--     , DUP2
+--     , LT
+--     , PUSH32 upperLimit
+--     , DUP3
+--     , GT
+--     , OR
+--     , excAddress
+--     , JUMPI
+--     , SWAP1
+--     , SWAP2
+--     , SWAP1
+--     , SSTORE
+--     , JUMP
+--     , JUMPDEST -- excAddress
+--     , PUSH1 (pack [0x00]) -- revert start location
+--     , PUSH1 (pack [0x00]) -- revert end location
+--     , REVERT
+--     , JUMPDEST -- storeProcEnd
+--     ]

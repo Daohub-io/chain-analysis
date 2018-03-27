@@ -9,6 +9,7 @@ import Data.ByteString.Base16
 import Data.Maybe
 import Data.Monoid (mempty)
 
+import Numeric.Natural
 
 import Test.Framework (defaultMain, defaultMainWithOpts, testGroup)
 import Test.Framework.Options (TestOptions, TestOptions'(..))
@@ -23,6 +24,7 @@ import Check.Stores
 import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
+import OpCode.Utils
 import Models.HandWritten
 
 import Data.List
@@ -59,13 +61,34 @@ mainWithOpts = do
 
     defaultMainWithOpts tests my_runner_opts
 
-tests =
+tests = -- [testGroup "Number" $ (hUnitTestToTests numberTests)]
     [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
     -- , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testGroup "Checks" $ (hUnitTestToTests storeCheckerTests)
+    , testGroup "Number" $ (hUnitTestToTests numberTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
+    , testProperty "Round-Trip Natural to Bytecode" prop_integerToEVM256_roundTrip
     ]
+
+numberTests = TestLabel "Numbers" $ TestList
+    [ naturalRoundTrip 0x00
+    , naturalRoundTrip 0x0011
+    , naturalRoundTrip 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    ]
+
+naturalRoundTrip number = TestLabel ("Parse " ++ show number) $ TestCase $
+    assertBool
+        (show (abs number) ++ " /= " ++ show (encode (integerToEVM256 (fromIntegral (abs number)))))
+        (prop_integerToEVM256_roundTrip number)
+
+
+prop_integerToEVM256_roundTrip :: Integer -> Bool
+prop_integerToEVM256_roundTrip int =
+    let nat = abs int
+        bs = integerToEVM256 (fromIntegral nat)
+        num = evm256ToInteger bs
+    in nat == (fromIntegral num)
 
 prop_anyValidOpCode_roundTrip :: OpCode -> Bool
 prop_anyValidOpCode_roundTrip opCode =
