@@ -8,7 +8,6 @@ import qualified Data.ByteString.Char8 as C8 (pack)
 import Data.ByteString.Base16
 import Data.Maybe
 import Data.Monoid (mempty)
-import System.Environment
 
 
 import Test.Framework (defaultMain, defaultMainWithOpts, testGroup)
@@ -27,6 +26,12 @@ import OpCode.Type
 import Models.HandWritten
 
 import Data.List
+
+import System.Directory
+import System.Environment
+import System.FilePath
+import System.Process
+import System.IO.Temp
 
 main = do
     putStrLn "Running tests..."
@@ -173,15 +178,11 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
     , TestLabel "Should Parse Compiled Examples" $ TestList $
         [ TestLabel "Should Parse \"Storer\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Storer.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
             parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Adder.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
             parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\" Without Swarm Metadata" $ TestCase $ do
             -- Read in the test data file
@@ -200,9 +201,7 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             assertBool "Calls without should pass store checker" (checkStores [PUSH1 (pack [0x4]), POP])
         , TestLabel "\"Adder\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Adder.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls without should pass store checker" (checkStores code)
         ]
@@ -212,9 +211,7 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Storer.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
         ]
@@ -232,11 +229,8 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             assertBool "Protected stored calls should pass store checker" (checkStores code)
         , TestLabel "\"StoreProtetected\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Protection/StorerProtected.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Protection/StorerProtected.sol"
             code <- parseGoodExample bsDecoded
-            print code
             assertBool "Protected stored calls should pass store checker" (checkStores code)
         ]
     ]
@@ -296,3 +290,21 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         ]
     ]
 
+compileSolidityFile :: FilePath -> IO B.ByteString
+compileSolidityFile path = withSystemTempDirectory "solc-comp" $ \tempdir -> do
+    (_, Just hout, _, hndl) <-
+        createProcess (proc "node" ["node_modules/solc/solcjs", path, "--bin", "--output-dir", tempdir])
+            { std_out = CreatePipe }
+    exitCode <- waitForProcess hndl
+    -- We are assuming this is the contract name
+    let contractName = takeBaseName path
+    bytecodeHex <- B.readFile (joinPath [tempdir, mangleFilename path ++ "_sol_" ++ contractName ++ ".bin"])
+    let (bytecode,_) = decode bytecodeHex
+    pure bytecode
+
+mangleFilename :: FilePath -> String
+mangleFilename path =
+    let
+        withoutExtension = dropExtension path
+        filepathPieces = splitDirectories withoutExtension
+    in intercalate "_" filepathPieces

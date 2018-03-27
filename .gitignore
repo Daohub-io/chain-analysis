@@ -1,3 +1,4 @@
 .stack-work/
 #evm-mod.cabal
 *~
+node_modules
