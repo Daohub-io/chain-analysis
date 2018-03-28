@@ -1,4 +1,17 @@
 -- |General interface for bytecode transformers.
+--
+-- Code can be in a number of states
+--
+--   1. @[OpCode]@ - A list of opcodes as parsed by the parser, fully static.
+--   2. @[CountedOpCode]@ - The same list of opcodes as in #1, but each @OpCode@
+--      is given an index of its starting location, beginning from one (this may
+--      need to be zero). In this state, opcodes can be inserted, but will carry
+--      an index of Nothing.
+--   3. @[VarOpCode]@ - A list of opcodes that each might be either a normal
+--      @CountedOpCode@ (@Just n@, or @Nothing@ as an index) or a @PushVar@ with
+--      an integer indicating a value that will need to be inserted later (such
+--      as the location of the jump table). These insertions are made by
+--      @replaceVars@.
 module Process where
 
 import Data.ByteString (empty)
@@ -11,12 +24,22 @@ transform opCodes = replaceVars $ replaceJumps $ insertProtections $ countCodes 
 
 type CountedOpCode = (OpCode, Maybe Integer)
 
+-- |Check if a list of counted @OpCode@s is strictly monotonically increasing.
+isMonotonic :: [CountedOpCode] -> Bool
+isMonotonic opCodes = f 0 opCodes
+    where
+        f lastIndex ((_, Just currentIndex):xs)
+            | currentIndex > lastIndex = f currentIndex xs
+            | otherwise = False
+        f lastIndex ((_, Nothing):xs) = f lastIndex xs
+        f _ [] = True
+
 countCodes :: [OpCode] -> [CountedOpCode]
-countCodes = countCodesAcc ([], 0) 
+countCodes = countCodesAcc ([], 0)
 
 countCodesAcc :: ([CountedOpCode], Integer) -> [OpCode] -> [CountedOpCode]
-countCodesAcc (counted, i) (x:xs) = countCodesAcc ((x, Just nextValue) : counted, i + 1) xs
-    where nextValue = case x of 
+countCodesAcc (counted, i) (x:xs) = countCodesAcc ((x, Just nextValue) : counted, nextValue) xs
+    where nextValue = case x of
             PUSH1 _ -> i + 2
             PUSH2 _ -> i + 3
             PUSH3 _ -> i + 4
@@ -49,8 +72,8 @@ countCodesAcc (counted, i) (x:xs) = countCodesAcc ((x, Just nextValue) : counted
             PUSH30 _ -> i + 31
             PUSH31 _ -> i + 32
             PUSH32 _ -> i + 33
-            _ -> i + 1 
-countCodesAcc (counted, i) [] = counted
+            _ -> i + 1
+countCodesAcc (counted, i) [] = reverse counted
 
 jumpDestinations :: [CountedOpCode] -> [Integer]
 jumpDestinations codes = foldl func [] codes where
@@ -62,7 +85,7 @@ jumpDestinations codes = foldl func [] codes where
 -- TODO: move somewhere and implement
 protectCall :: OpCode -> [OpCode]
 -- protectCall SSTORE ...
-protectCall code = [code] 
+protectCall code = [code]
 
 insertProtections :: [CountedOpCode] -> [CountedOpCode]
 insertProtections codes = codes >>= (\ccode -> case ccode of
@@ -70,15 +93,15 @@ insertProtections codes = codes >>= (\ccode -> case ccode of
 
 data VarOpCode = Counted CountedOpCode | PushVar Integer deriving Show
 
-replaceJumps :: [CountedOpCode] -> [VarOpCode] 
-replaceJumps codes = (codes >>= (\ccode -> case ccode of 
+replaceJumps :: [CountedOpCode] -> [VarOpCode]
+replaceJumps codes = (codes >>= (\ccode -> case ccode of
     j@(JUMP, _) -> [ PushVar tailJumpDest, Counted j]
     _ -> [Counted ccode])) ++ jumpTail tailJumpDest (jumpDestinations codes) where
     tailJumpDest = -1
 
 -- add tail like
 -- pushVar tailJumpDest
--- pop = pop() 
+-- pop = pop()
 -- if (pop == j1) PushVar j1; jump
 -- ...
 -- if (pop == jk) PushVar jk; jump
@@ -90,15 +113,15 @@ varMapping :: [VarOpCode] -> Map.Map Integer Integer
 varMapping codes = Map.fromList (map varMap (zip countedCodes codes)) where
     countedCodes = countCodes (map (\c -> case c of
         Counted (oCode, _) -> oCode
-        PushVar _ -> PUSH1 empty) codes) -- TODO: check PUSH1 or not 
-    varMap x = case x of 
+        PushVar _ -> PUSH1 empty) codes) -- TODO: check PUSH1 or not
+    varMap x = case x of
         ((_, Just i), Counted (_, Just j)) -> (i, j)
         _ -> (-2, -2) -- TODO: use Maybe!
 
 replaceVars :: [VarOpCode] -> [OpCode]
 replaceVars varOpCodes = map (\vCode -> case vCode of
     PushVar x -> case Map.lookup x varMap of
-        Just y -> PUSH1 empty -- TODO replace with PUSH1 encoded y 
+        Just y -> PUSH1 empty -- TODO replace with PUSH1 encoded y
         Nothing -> undefined
-    Counted (code, _) -> code) varOpCodes where --TODO: catch exceptions properly! 
+    Counted (code, _) -> code) varOpCodes where --TODO: catch exceptions properly!
         varMap = varMapping varOpCodes

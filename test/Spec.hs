@@ -23,6 +23,7 @@ import Test.HUnit
 import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
+import Process
 import Models.HandWritten
 
 import Data.List
@@ -58,6 +59,8 @@ tests =
     -- , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
+    , testProperty "Monotonic Counted Bytecode" prop_anyCountedBytecode_monotonic
+    , testProperty "Preserved Counted Bytecode" prop_anyCountedBytecode_codePreserved
     ]
 
 prop_anyValidOpCode_roundTrip :: OpCode -> Bool
@@ -77,6 +80,20 @@ prop_anyValidBytecode_roundTrip bytecode =
             Fail i contexts err -> False
             Partial f -> error $ "impossible error"
             Done i r -> True
+
+prop_anyCountedBytecode_monotonic :: [OpCode] -> Bool
+prop_anyCountedBytecode_monotonic bytecode =
+    let countedBytecode = countCodes bytecode
+    in isMonotonic countedBytecode
+
+prop_anyCountedBytecode_codePreserved :: [OpCode] -> Bool
+prop_anyCountedBytecode_codePreserved bytecode =
+    let countedBytecode = countCodes bytecode
+    in (length countedBytecode == length bytecode)
+        && (and $ zipWith sameOpCode bytecode countedBytecode)
+    where
+        sameOpCode :: OpCode -> CountedOpCode -> Bool
+        sameOpCode opCodeO (opCodeN,_) = opCodeO == opCodeN
 
 -- Parse each of the opcodes individually.
 -- TODO: finish this list.
