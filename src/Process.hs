@@ -18,6 +18,7 @@ import Data.ByteString (empty, pack)
 import Data.ByteString.Base16 (encode)
 import qualified Data.Map as Map
 import OpCode.Type
+import OpCode.Utils
 
 transform :: [OpCode] -> [OpCode]
 transform opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections $ countCodes opCodes
@@ -111,7 +112,7 @@ jumpDests codes = foldl f Map.empty reCounted
 
 replaceVars :: (Integer, [VarOpCode]) -> [OpCode]
 replaceVars (jumpTableDest, varOpCodes) = map (\vCode -> case vCode of
-    PushVar JumpTableDest256 -> PUSH32 (pack $ replicate 32 0x01)
+    PushVar JumpTableDest256 -> PUSH32 (integerToEVM256 $ fromIntegral jumpTableDest)
     Counted (code, _) -> code
     ) varOpCodes
     -- where --TODO: catch exceptions properly!
