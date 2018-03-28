@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: haskell
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - deps3-{{ .Branch }}-{{ .Revision }}
+            - deps3-{{ .Branch }}-
+      - run:
+          name: Setup
+          command: |
+            stack setup --no-terminal
+      - run:
+          name: Build
+          command: |
+            stack build --no-terminal
+      - run:
+          name: Test
+          command: |
+            stack test --no-terminal
+      - save_cache:
+          key: deps3-{{ .Branch }}-
+          paths:
+            - "~/.stack"
+            - ".stack-work"
