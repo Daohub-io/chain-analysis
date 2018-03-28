@@ -155,6 +155,41 @@ data OpCode
     | SELFDESTRUCT
     deriving (Eq, Show)
 
+nBytes :: OpCode -> Integer
+nBytes (PUSH1 _) = 1
+nBytes (PUSH2 _) = 1 + 2
+nBytes (PUSH3 _) = 1 + 3
+nBytes (PUSH4 _) = 1 + 4
+nBytes (PUSH5 _) = 1 + 5
+nBytes (PUSH6 _) = 1 + 6
+nBytes (PUSH7 _) = 1 + 7
+nBytes (PUSH8 _) = 1 + 8
+nBytes (PUSH9 _) = 1 + 9
+nBytes (PUSH10 _) = 1 + 10
+nBytes (PUSH11 _) = 1 + 11
+nBytes (PUSH12 _) = 1 + 12
+nBytes (PUSH13 _) = 1 + 13
+nBytes (PUSH14 _) = 1 + 14
+nBytes (PUSH15 _) = 1 + 15
+nBytes (PUSH16 _) = 1 + 16
+nBytes (PUSH17 _) = 1 + 17
+nBytes (PUSH18 _) = 1 + 18
+nBytes (PUSH19 _) = 1 + 19
+nBytes (PUSH20 _) = 1 + 20
+nBytes (PUSH21 _) = 1 + 21
+nBytes (PUSH22 _) = 1 + 22
+nBytes (PUSH23 _) = 1 + 23
+nBytes (PUSH24 _) = 1 + 24
+nBytes (PUSH25 _) = 1 + 25
+nBytes (PUSH26 _) = 1 + 26
+nBytes (PUSH27 _) = 1 + 27
+nBytes (PUSH28 _) = 1 + 28
+nBytes (PUSH29 _) = 1 + 29
+nBytes (PUSH30 _) = 1 + 30
+nBytes (PUSH31 _) = 1 + 31
+nBytes (PUSH32 _) = 1 + 32
+nBytes _ = 1
+
 instance Arbitrary OpCode where
     arbitrary = oneof
         [ pure STOP

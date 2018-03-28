@@ -56,7 +56,7 @@ mainWithOpts = do
 
 tests =
     [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
-    -- , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
+    , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
     , testProperty "Monotonic Counted Bytecode" prop_anyCountedBytecode_monotonic
@@ -208,57 +208,62 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
     ]
 
 preprocessorTests = TestLabel "Preprocessor" $ TestList $
-    [ TestLabel "Passthrough" $ TestList $
-        [ TestLabel "Should Reject Invalid Code" $ TestCase $ do
-            undefined
-        , TestLabel "Should Leave Valid Code Unchanged" $ TestCase $ do
-            undefined
+    -- [ TestLabel "Passthrough" $ TestList $
+    --     [ TestLabel "Should Reject Invalid Code" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Leave Valid Code Unchanged" $ TestCase $ do
+    --         undefined
+    --     ]
+    [ TestLabel "Storage Protection" $ TestList $
+        [ TestLabel "Should Leave Code w/o Jumps or JumpDests Unchanged" $ TestCase $ do
+            let code = [STOP, STOP, STOP]
+            assertEqual "Code should remain unchanged" code (transform code)
         ]
-    , TestLabel "Append OpCodes" $ TestList $
-        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code of Increased Length" $ TestCase $ do
-            undefined
-        , TestLabel "Should Append the OpCodes" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
-            undefined
-        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
-            undefined
-        ]
-    , TestLabel "Insert OpCodes" $ TestList $
-        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code of Increased Length" $ TestCase $ do
-            undefined
-        , TestLabel "Should Insert the OpCodes (Correct Location)" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
-            undefined
-        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
-            undefined
-        ]
-    , TestLabel "Remove OpCodes" $ TestList $
-        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code of Decreased Length" $ TestCase $ do
-            undefined
-        , TestLabel "Should Remove the OpCodes (Correct Location)" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
-            undefined
-        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
-            undefined
-        ]
-    , TestLabel "Insert and Remove Opcodes" $ TestList $
-        [ TestLabel "Should Produce Valid Code" $ TestCase $ do
-            undefined
-        , TestLabel "Should Effect the Correct Changes" $ TestCase $ do
-            undefined
-        , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
-            undefined
-        , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
-            undefined
-        ]
+    -- , TestLabel "Append OpCodes" $ TestList $
+    --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code of Increased Length" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Append the OpCodes" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+    --         undefined
+    --     ]
+    -- , TestLabel "Insert OpCodes" $ TestList $
+    --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code of Increased Length" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Insert the OpCodes (Correct Location)" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+    --         undefined
+    --     ]
+    -- , TestLabel "Remove OpCodes" $ TestList $
+    --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code of Decreased Length" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Remove the OpCodes (Correct Location)" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+    --         undefined
+    --     ]
+    -- , TestLabel "Insert and Remove Opcodes" $ TestList $
+    --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Effect the Correct Changes" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Produce Code With Valid Jumps" $ TestCase $ do
+    --         undefined
+    --     , TestLabel "Should Maintain the Input Jump Locations" $ TestCase $ do
+    --         undefined
+    --     ]
     ]
 

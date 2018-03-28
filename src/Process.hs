@@ -14,13 +14,13 @@
 --      @replaceVars@.
 module Process where
 
-import Data.ByteString (empty)
+import Data.ByteString (empty, pack)
 import Data.ByteString.Base16 (encode)
 import qualified Data.Map as Map
 import OpCode.Type
 
 transform :: [OpCode] -> [OpCode]
-transform opCodes = replaceVars $ replaceJumps $ insertProtections $ countCodes opCodes
+transform opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections $ countCodes opCodes
 
 type CountedOpCode = (OpCode, Maybe Integer)
 
@@ -39,41 +39,20 @@ countCodes = countCodesAcc ([], 0)
 
 countCodesAcc :: ([CountedOpCode], Integer) -> [OpCode] -> [CountedOpCode]
 countCodesAcc (counted, i) (x:xs) = countCodesAcc ((x, Just nextValue) : counted, nextValue) xs
-    where nextValue = case x of
-            PUSH1 _ -> i + 2
-            PUSH2 _ -> i + 3
-            PUSH3 _ -> i + 4
-            PUSH4 _ -> i + 5
-            PUSH5 _ -> i + 6
-            PUSH6 _ -> i + 7
-            PUSH7 _ -> i + 8
-            PUSH8 _ -> i + 9
-            PUSH9 _ -> i + 10
-            PUSH10 _ -> i + 11
-            PUSH11 _ -> i + 12
-            PUSH12 _ -> i + 13
-            PUSH13 _ -> i + 14
-            PUSH14 _ -> i + 15
-            PUSH15 _ -> i + 16
-            PUSH16 _ -> i + 17
-            PUSH17 _ -> i + 18
-            PUSH18 _ -> i + 19
-            PUSH19 _ -> i + 20
-            PUSH20 _ -> i + 21
-            PUSH21 _ -> i + 22
-            PUSH22 _ -> i + 23
-            PUSH23 _ -> i + 24
-            PUSH24 _ -> i + 25
-            PUSH25 _ -> i + 26
-            PUSH26 _ -> i + 27
-            PUSH27 _ -> i + 28
-            PUSH28 _ -> i + 29
-            PUSH29 _ -> i + 30
-            PUSH30 _ -> i + 31
-            PUSH31 _ -> i + 32
-            PUSH32 _ -> i + 33
-            _ -> i + 1
+    where
+        nextValue = i + (nBytes x)
 countCodesAcc (counted, i) [] = reverse counted
+
+countVarOpCodes :: [VarOpCode] -> [(VarOpCode, Integer)]
+countVarOpCodes = countVarOpCodesAcc ([], 0)
+
+countVarOpCodesAcc :: ([(VarOpCode, Integer)], Integer) -> [VarOpCode] -> [(VarOpCode, Integer)]
+countVarOpCodesAcc (counted, i) (x:xs) = countVarOpCodesAcc ((x, nextValue) : counted, nextValue) xs
+    where
+        nextValue = case x of
+            Counted (x,_) -> i + (nBytes x)
+            PushVar JumpTableDest256 -> i + 1 + 32
+countVarOpCodesAcc (counted, i) [] = reverse counted
 
 jumpDestinations :: [CountedOpCode] -> [Integer]
 jumpDestinations codes = foldl func [] codes where
@@ -84,21 +63,27 @@ jumpDestinations codes = foldl func [] codes where
 -- presumes that result doesn't contain JUMP and JUMPDEST opcodes
 -- TODO: move somewhere and implement
 protectCall :: OpCode -> [OpCode]
--- protectCall SSTORE ...
+protectCall SSTORE = [PUSH1 (pack [0x64]), POP, SSTORE] -- TODO: only dummy code
 protectCall code = [code]
 
 insertProtections :: [CountedOpCode] -> [CountedOpCode]
 insertProtections codes = codes >>= (\ccode -> case ccode of
     (opCode, _) -> fmap (\c -> (c, Nothing)) (protectCall opCode))
 
-data VarOpCode = Counted CountedOpCode | PushVar Integer deriving Show
+data VarOpCode = Counted CountedOpCode | PushVar PushVarVal deriving (Eq, Show)
+data PushVarVal = JumpTableDest256 deriving (Eq, Show)
 
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
-    j@(JUMP, _) -> [ PushVar tailJumpDest, Counted j]
-    _ -> [Counted ccode])) ++ jumpTail tailJumpDest (jumpDestinations codes) where
-    tailJumpDest = -1
+    j@(JUMP, _) -> [ PushVar JumpTableDest256, Counted j]
+    _ -> [Counted ccode])
+    )
 
+-- |Returns a tuple of the jump destination of the jump table and the code.
+appendJumpTable :: [VarOpCode] -> (Integer, [VarOpCode])
+appendJumpTable codes = (jumpTableDest, codes ++ jumpTable (jumpDests codes))
+    where
+        jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
 -- add tail like
 -- pushVar tailJumpDest
 -- pop = pop()
@@ -106,22 +91,28 @@ replaceJumps codes = (codes >>= (\ccode -> case ccode of
 -- ...
 -- if (pop == jk) PushVar jk; jump
 -- TODO: implement
-jumpTail :: Integer -> [Integer] -> [VarOpCode]
-jumpTail tailJumpDest jumpDests = [ PushVar tailJumpDest ] ++ map PushVar jumpDests
+jumpTable :: Map.Map Integer Integer -> [VarOpCode]
+-- jumpTable jumpDests = [ PushVar tailJumpDest ] ++ map PushVar jumpDests
+jumpTable jumpDests = []
 
-varMapping :: [VarOpCode] -> Map.Map Integer Integer
-varMapping codes = Map.fromList (map varMap (zip countedCodes codes)) where
-    countedCodes = countCodes (map (\c -> case c of
-        Counted (oCode, _) -> oCode
-        PushVar _ -> PUSH1 empty) codes) -- TODO: check PUSH1 or not
-    varMap x = case x of
-        ((_, Just i), Counted (_, Just j)) -> (i, j)
-        _ -> (-2, -2) -- TODO: use Maybe!
+-- |Find a mapping from all jump destinations to their new destinations. First,
+-- recount the byte locations to determine the new indices, then fold these into
+-- a map.
+jumpDests :: [VarOpCode] -> Map.Map Integer Integer
+jumpDests codes = foldl f Map.empty reCounted
+    where
+        -- Recount to determine the new positions of codes
+        reCounted = countVarOpCodes codes
+        -- If we find a jump dest, add (k,v) (oldLocation, newLocation) to the
+        -- map
+        f m (Counted (JUMPDEST, (Just n)), i) = Map.insert n i m
+        -- Otherwise do nothing.
+        f m _ = m
 
-replaceVars :: [VarOpCode] -> [OpCode]
-replaceVars varOpCodes = map (\vCode -> case vCode of
-    PushVar x -> case Map.lookup x varMap of
-        Just y -> PUSH1 empty -- TODO replace with PUSH1 encoded y
-        Nothing -> undefined
-    Counted (code, _) -> code) varOpCodes where --TODO: catch exceptions properly!
-        varMap = varMapping varOpCodes
+replaceVars :: (Integer, [VarOpCode]) -> [OpCode]
+replaceVars (jumpTableDest, varOpCodes) = map (\vCode -> case vCode of
+    PushVar JumpTableDest256 -> PUSH32 (pack $ replicate 32 0x01)
+    Counted (code, _) -> code
+    ) varOpCodes
+    -- where --TODO: catch exceptions properly!
+    --     varMap = varMapping varOpCodes
