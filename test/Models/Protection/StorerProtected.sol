@@ -17,21 +17,21 @@ contract StorerProtected {
 
             jump(storeProcEnd) // Rudimentary fall-through protection
             storeProc:
-                swap1
-                0x0100000000000000000000000000000000000000000000000000000000000000
-                dup2
-                lt
-                0x0200000000000000000000000000000000000000000000000000000000000000
-                dup3
-                gt
-                or
-                excAddress
-                jumpi
-                swap1
-                swap2
-                swap1
-                sstore
-                jump
+                swap1 // swap store address and continue address (store on top after this)
+                0x0100000000000000000000000000000000000000000000000000000000000000 // lower limit
+                dup2 // duplicate store address for comparison
+                lt // see if address is lower than the lower limit
+                0x0200000000000000000000000000000000000000000000000000000000000000 // upper limit
+                dup3 // duplicate store address for comparison
+                gt // see if the store address is higher than the upper limit
+                or // set top of stack to 1 if either is true
+                excAddress // push the exception address
+                jumpi // jump to exception if SSTORE is out of pounds
+                swap1 // to put the continue address
+                swap2 //      under the two SSTORE arguments
+                swap1 //
+                sstore // perform the store
+                jump // return to the call site and continue
             excAddress:
                 0x0
                 0x0
