@@ -6,6 +6,7 @@ import Data.ByteString (pack)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8 (pack)
 import Data.ByteString.Base16
+import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid (mempty)
 
@@ -298,12 +299,47 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , STOP
                     , JUMPDEST
                     ]
-                expected =
+                dests = map snd $ countCodes code
+                expected = map Just [0,2,3,4]
+            assertEqual "Jump dests should be correct" expected dests
+        , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
+            let code =
                     [ PUSH1 (pack [0x4])
-                    , PUSH32 (pack $ replicate 32 0x01)
                     , JUMP
                     , STOP
                     , JUMPDEST
+                    ]
+                table = jumpTable $ jumpDests $ replaceJumps $ insertProtections $ countCodes code
+                table2 = jumpTable $ jumpDests $ replaceJumps $ countCodes code
+                expected = (5,[Counted (STOP, Nothing)])
+            assertEqual "Table should be correct" table2 table
+        , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    ]
+                expected =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH32 (integerToEVM256 $ fromIntegral 38)
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    ] ++
+                    [ JUMPDEST ] ++
+                    [ DUP1
+                    , PUSH32 (integerToEVM256 $ fromIntegral 4)
+                    , OpCode.Type.EQ
+                    , PUSH32 (integerToEVM256 $ fromIntegral 37)
+                    , SWAP1
+                    , PUSH32 (integerToEVM256 $ fromIntegral 143)
+                    , JUMPI
+                    ] ++
+                    [ JUMPDEST
+                    , SWAP1
+                    , POP
+                    , JUMP
                     ]
             assertEqual "Table should be added" expected (transform code)
         ]

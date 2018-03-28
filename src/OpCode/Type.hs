@@ -295,7 +295,7 @@ instance Show OpCode where
     show SELFDESTRUCT = "SELFDESTRUCT"
 
 nBytes :: OpCode -> Integer
-nBytes (PUSH1 _) = 1
+nBytes (PUSH1 _) = 1 + 1
 nBytes (PUSH2 _) = 1 + 2
 nBytes (PUSH3 _) = 1 + 3
 nBytes (PUSH4 _) = 1 + 4

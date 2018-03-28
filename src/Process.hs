@@ -20,6 +20,8 @@ import qualified Data.Map as Map
 import OpCode.Type
 import OpCode.Utils
 
+import Debug.Trace
+
 transform :: [OpCode] -> [OpCode]
 transform opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections $ countCodes opCodes
 
@@ -27,19 +29,20 @@ type CountedOpCode = (OpCode, Maybe Integer)
 
 -- |Check if a list of counted @OpCode@s is strictly monotonically increasing.
 isMonotonic :: [CountedOpCode] -> Bool
-isMonotonic opCodes = f 0 opCodes
+isMonotonic opCodes = f Nothing opCodes
     where
-        f lastIndex ((_, Just currentIndex):xs)
-            | currentIndex > lastIndex = f currentIndex xs
+        f Nothing ((_, currentIndex):xs) = f currentIndex xs
+        f (Just lastIndex) ((_, Just currentIndex):xs)
+            | currentIndex > lastIndex = f (Just currentIndex) xs
             | otherwise = False
-        f lastIndex ((_, Nothing):xs) = f lastIndex xs
+        f l ((_, Nothing):xs) = f l xs
         f _ [] = True
 
 countCodes :: [OpCode] -> [CountedOpCode]
 countCodes = countCodesAcc ([], 0)
 
 countCodesAcc :: ([CountedOpCode], Integer) -> [OpCode] -> [CountedOpCode]
-countCodesAcc (counted, i) (x:xs) = countCodesAcc ((x, Just nextValue) : counted, nextValue) xs
+countCodesAcc (counted, i) (x:xs) = countCodesAcc ((x, Just i) : counted, nextValue) xs
     where
         nextValue = i + (nBytes x)
 countCodesAcc (counted, i) [] = reverse counted
@@ -48,7 +51,7 @@ countVarOpCodes :: [VarOpCode] -> [(VarOpCode, Integer)]
 countVarOpCodes = countVarOpCodesAcc ([], 0)
 
 countVarOpCodesAcc :: ([(VarOpCode, Integer)], Integer) -> [VarOpCode] -> [(VarOpCode, Integer)]
-countVarOpCodesAcc (counted, i) (x:xs) = countVarOpCodesAcc ((x, nextValue) : counted, nextValue) xs
+countVarOpCodesAcc (counted, i) (x:xs) = countVarOpCodesAcc ((x, i) : counted, nextValue) xs
     where
         nextValue = case x of
             Counted (x,_) -> i + (nBytes x)
@@ -69,10 +72,12 @@ protectCall code = [code]
 
 insertProtections :: [CountedOpCode] -> [CountedOpCode]
 insertProtections codes = codes >>= (\ccode -> case ccode of
-    (opCode, _) -> fmap (\c -> (c, Nothing)) (protectCall opCode))
+    (SSTORE, _) -> fmap (\c -> (c, Nothing)) (protectCall SSTORE)
+    (opCode, n) -> fmap (\c -> (c, n)) (protectCall opCode)
+    )
 
 data VarOpCode = Counted CountedOpCode | PushVar PushVarVal deriving (Eq, Show)
-data PushVarVal = JumpTableDest256 deriving (Eq, Show)
+data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
@@ -81,10 +86,15 @@ replaceJumps codes = (codes >>= (\ccode -> case ccode of
     )
 
 -- |Returns a tuple of the jump destination of the jump table and the code.
-appendJumpTable :: [VarOpCode] -> (Integer, [VarOpCode])
-appendJumpTable codes = (jumpTableDest, codes ++ jumpTable (jumpDests codes))
+appendJumpTable :: [VarOpCode] -> (Integer, Integer,  [VarOpCode])
+appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
     where
+        table = jumpTable (jumpDests codes)
         jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
+        jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 4
+
+nBytesVar (Counted (x,_)) = nBytes x
+nBytesVar (PushVar x) = 1 + 33
 -- add tail like
 -- pushVar tailJumpDest
 -- pop = pop()
@@ -94,7 +104,25 @@ appendJumpTable codes = (jumpTableDest, codes ++ jumpTable (jumpDests codes))
 -- TODO: implement
 jumpTable :: Map.Map Integer Integer -> [VarOpCode]
 -- jumpTable jumpDests = [ PushVar tailJumpDest ] ++ map PushVar jumpDests
-jumpTable jumpDests = []
+jumpTable jumpDests
+    | Map.null jumpDests = []
+    | otherwise = [Counted (JUMPDEST, Nothing)] ++ (concat $ Map.elems $ Map.mapWithKey mkJTEntry jumpDests) ++ jumpDispatch
+    where
+        mkJTEntry old new =
+            [ Counted (DUP1, Nothing)
+            , Counted (PUSH32 (integerToEVM256 $ fromIntegral old), Nothing)
+            , Counted (OpCode.Type.EQ, Nothing)
+            , Counted (PUSH32 (integerToEVM256 $ fromIntegral new), Nothing)
+            , Counted (SWAP1, Nothing)
+            , PushVar JDispatch256
+            , Counted (JUMPI, Nothing)
+            ]
+        jumpDispatch =
+            [ Counted (JUMPDEST, Nothing)
+            , Counted (SWAP1, Nothing)
+            , Counted (POP, Nothing)
+            , Counted (JUMP, Nothing)
+            ]
 
 -- |Find a mapping from all jump destinations to their new destinations. First,
 -- recount the byte locations to determine the new indices, then fold these into
@@ -110,9 +138,10 @@ jumpDests codes = foldl f Map.empty reCounted
         -- Otherwise do nothing.
         f m _ = m
 
-replaceVars :: (Integer, [VarOpCode]) -> [OpCode]
-replaceVars (jumpTableDest, varOpCodes) = map (\vCode -> case vCode of
+replaceVars :: (Integer, Integer, [VarOpCode]) -> [OpCode]
+replaceVars (jumpTableDest, jumpDispatchDest, varOpCodes) = map (\vCode -> case vCode of
     PushVar JumpTableDest256 -> PUSH32 (integerToEVM256 $ fromIntegral jumpTableDest)
+    PushVar JDispatch256 -> PUSH32 (integerToEVM256 $ fromIntegral jumpDispatchDest)
     Counted (code, _) -> code
     ) varOpCodes
     -- where --TODO: catch exceptions properly!
