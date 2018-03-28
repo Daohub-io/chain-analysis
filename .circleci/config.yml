@@ -2,17 +2,9 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.6.2
-    working_directory: /tmp/my-project
+      - image: haskell
     steps:
       - checkout
-      - run:
-          name: Install Stack
-          command: |
-            wget https://github.com/commercialhaskell/stack/releases/download/v1.6.3/stack-1.6.3-linux-x86_64.tar.gz -O /tmp/stack.tar.gz
-            mkdir /tmp/stack/
-            tar -xvzf /tmp/stack.tar.gz -C /tmp/stack/
-            sudo mv /tmp/stack/stack-1.6.3-linux-x86_64/stack /usr/bin/stack
       - restore_cache:
           keys:
             - deps3-{{ .Branch }}-{{ .Revision }}
