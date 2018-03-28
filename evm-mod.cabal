@@ -23,6 +23,7 @@ library
       , bytestring
       , base16-bytestring
       , attoparsec
+      , containers
       , QuickCheck
   exposed-modules:
       OpCode.Exporter,
