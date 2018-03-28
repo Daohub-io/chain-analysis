@@ -1,3 +1,11 @@
+{-|
+Module      : OpCode.Parser
+Description : Parse for EVM bytecode
+Copyright   : (c) Daolab 2018
+
+Functionality for parsing EVM bytecode.
+-}
+
 module OpCode.Parser where
 
 import OpCode.Type
@@ -9,7 +17,6 @@ import Data.ByteString (pack)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import Data.Attoparsec.ByteString as A
--- import Data.Attoparsec.Binary
 import Data.Char (isSpace)
 import Data.List as L
 import Debug.Trace
@@ -19,12 +26,17 @@ import Control.Monad
 
 import Test.QuickCheck
 
+-- |Parse some bytecode. This may be full contract or not. This also accounts
+-- for Swarm metadata, which is not part of the EVM specification, but is
+-- appended to a contract's bytecode when it is compiled from Solidity.
 parseOpCodes :: Parser [OpCode]
 parseOpCodes = manyTill parseOpCode (parseSwarmMetadata  <|> endOfInput)
 
+-- |Parse a single op code.
 parseOpCode :: Parser OpCode
 parseOpCode = choice opCodeParserList
 
+-- | A list of op code parsers.
 opCodeParserList :: [Parser OpCode]
 opCodeParserList =
     [ parseSTOP
@@ -311,7 +323,8 @@ parseINVALID = word8 0xfe >> pure INVALID
 parseSELFDESTRUCT = word8 0xff >> pure SELFDESTRUCT
 
 -- |Parse the Swarm metadata
--- http://solidity.readthedocs.io/en/v0.4.21/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode
+-- http://solidity.readthedocs.io/en/v0.4.21/metadata.html#encoding-of-the-metadata-hash-in-the-bytecode.
+-- This is a series of bytes surrounding a 32 byte
 parseSwarmMetadata = do
     word8 0xa1
     word8 0x65

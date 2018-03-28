@@ -8,8 +8,8 @@ import qualified Data.ByteString.Char8 as C8 (pack)
 import Data.ByteString.Base16
 import Data.Maybe
 import Data.Monoid (mempty)
-import System.Environment
 
+import Numeric.Natural
 
 import Test.Framework (defaultMain, defaultMainWithOpts, testGroup)
 import Test.Framework.Options (TestOptions, TestOptions'(..))
@@ -20,13 +20,21 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck
 import Test.HUnit
 
+import Check.Stores
 import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
 import Process
+import OpCode.Utils
 import Models.HandWritten
 
 import Data.List
+
+import System.Directory
+import System.Environment
+import System.FilePath
+import System.Process
+import System.IO.Temp
 
 main = do
     putStrLn "Running tests..."
@@ -61,7 +69,29 @@ tests =
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
     , testProperty "Monotonic Counted Bytecode" prop_anyCountedBytecode_monotonic
     , testProperty "Preserved Counted Bytecode" prop_anyCountedBytecode_codePreserved
+    , testGroup "Checks" $ (hUnitTestToTests storeCheckerTests)
+    , testGroup "Number" $ (hUnitTestToTests numberTests)
+    , testProperty "Round-Trip Natural to Bytecode" prop_integerToEVM256_roundTrip
     ]
+
+numberTests = TestLabel "Numbers" $ TestList
+    [ naturalRoundTrip 0x00
+    , naturalRoundTrip 0x0011
+    , naturalRoundTrip 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    ]
+
+naturalRoundTrip number = TestLabel ("Parse " ++ show number) $ TestCase $
+    assertBool
+        (show (abs number) ++ " /= " ++ show (encode (integerToEVM256 (fromIntegral (abs number)))))
+        (prop_integerToEVM256_roundTrip number)
+
+
+prop_integerToEVM256_roundTrip :: Integer -> Bool
+prop_integerToEVM256_roundTrip int =
+    let nat = abs int
+        bs = integerToEVM256 (fromIntegral nat)
+        num = evm256ToInteger bs
+    in nat == (fromIntegral num)
 
 prop_anyValidOpCode_roundTrip :: OpCode -> Bool
 prop_anyValidOpCode_roundTrip opCode =
@@ -188,15 +218,11 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
     , TestLabel "Should Parse Compiled Examples" $ TestList $
         [ TestLabel "Should Parse \"Storer\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Storer.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
             parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\"" $ TestCase $ do
             -- Read in the test data file
-            bsEncoded <- B.readFile "test/Models/Adder.dat"
-            -- Decode the hex string from the file
-            let (bsDecoded,"") = decode bsEncoded
+            bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
             parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\" Without Swarm Metadata" $ TestCase $ do
             -- Read in the test data file
@@ -204,6 +230,53 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
             -- Decode the hex string from the file
             let (bsDecoded,"") = decode bsEncoded
             parseGoodExample bsDecoded >> pure ()
+        ]
+    ]
+
+storeCheckerTests = TestLabel "Store Checker" $ TestList $
+    [ TestLabel "Should Pass Empty Code" $ TestCase $ do
+        assertBool "Empty bytecode should pass store checker" (checkStores [])
+    , TestLabel "Should Pass Code Without SSTORE calls" $ TestList
+        [ TestLabel "Trivial Example" $ TestCase $ do
+            assertBool "Calls without should pass store checker" (checkStores [PUSH1 (pack [0x4]), POP])
+        , TestLabel "\"Adder\"" $ TestCase $ do
+            -- Read in the test data file
+            bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls without should pass store checker" (checkStores code)
+        , TestLabel "\"Fib\"" $ TestCase $ do
+            -- Read in the test data file
+            bsDecoded <- compileSolidityFile "test/Models/Fib.sol"
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls without should pass store checker" (checkStores code)
+        ]
+    , TestLabel "Should Reject Code With unprotected SSTORE calls" $ TestList
+        [ TestLabel "Trivial Example" $ TestCase $ do
+            let code = [PUSH1 (pack [0x4]), PUSH1 (pack [0x0]), SSTORE]
+            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+        , TestLabel "\"Storer\"" $ TestCase $ do
+            -- Read in the test data file
+            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+        ]
+    , TestLabel "Should Pass Code With protected SSTORE calls" $ TestList
+        [ TestLabel "Trivial Example" $ TestCase $ do
+            let code =
+                    [ PUSH2 (pack [0x92, 0x93])
+                    , PUSH32 (pack [0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                    , PUSH1 (pack [0x64])
+                    , PUSH1 (pack [0x40])
+                    , MLOAD
+                    , MSTORE
+                    , SSTORE
+                    ]
+            assertBool "Protected stored calls should pass store checker" (checkStores code)
+        , TestLabel "\"StoreProtetected\"" $ TestCase $ do
+            -- Read in the test data file
+            bsDecoded <- compileSolidityFile "test/Models/Protection/StorerProtected.sol"
+            code <- parseGoodExample bsDecoded
+            assertBool "Protected stored calls should pass store checker" (checkStores code)
         ]
     ]
 
@@ -282,3 +355,21 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
     --     ]
     ]
 
+compileSolidityFile :: FilePath -> IO B.ByteString
+compileSolidityFile path = withSystemTempDirectory "solc-comp" $ \tempdir -> do
+    (_, Just hout, _, hndl) <-
+        createProcess (proc "node" ["node_modules/solc/solcjs", path, "--bin", "--output-dir", tempdir])
+            { std_out = CreatePipe }
+    exitCode <- waitForProcess hndl
+    -- We are assuming this is the contract name
+    let contractName = takeBaseName path
+    bytecodeHex <- B.readFile (joinPath [tempdir, mangleFilename path ++ "_sol_" ++ contractName ++ ".bin"])
+    let (bytecode,_) = decode bytecodeHex
+    pure bytecode
+
+mangleFilename :: FilePath -> String
+mangleFilename path =
+    let
+        withoutExtension = dropExtension path
+        filepathPieces = splitDirectories withoutExtension
+    in intercalate "_" filepathPieces
