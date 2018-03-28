@@ -218,6 +218,21 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         [ TestLabel "Should Leave Code w/o Jumps or JumpDests Unchanged" $ TestCase $ do
             let code = [STOP, STOP, STOP]
             assertEqual "Code should remain unchanged" code (transform code)
+        , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    ]
+                expected =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH32 (pack $ replicate 32 0x01)
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    ]
+            assertEqual "Table should be added" expected (transform code)
         ]
     -- , TestLabel "Append OpCodes" $ TestList $
     --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
