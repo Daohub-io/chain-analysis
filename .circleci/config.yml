@@ -20,6 +20,8 @@ jobs:
       - run:
           name: Setup
           command: |
+            sudo apt-get -y install gcc
+            sudo apt-get -y install libgmp3-dev
             stack setup --no-terminal
       - run:
           name: Build
