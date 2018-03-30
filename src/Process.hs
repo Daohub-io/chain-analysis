@@ -65,7 +65,7 @@ jumpDestinations codes = foldl func [] codes where
         _ -> dests
 
 -- presumes that result doesn't contain JUMP and JUMPDEST opcodes
--- TODO: move somewhere and implement
+-- |See specification docs in the BeakerOS repository (https://github.com/DaoLab/beakeros/docs/0.1v/store-protect.md).
 protectCall :: OpCode -> [OpCode]
 protectCall SSTORE =
     [ PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
@@ -102,7 +102,7 @@ appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
     where
         table = jumpTable (jumpDests codes)
         jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
-        jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 4
+        jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 1 - 4
 
 nBytesVar (Counted (x,_)) = nBytes x
 nBytesVar (PushVar x) = 1 + 33

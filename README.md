@@ -17,3 +17,11 @@ currently configured to use the solcjs compiler from npm.
 npm i -D solc
 stack test
 ```
+
+## Documentation:
+
+In order to produce documentation for the Haskell code run:
+
+```
+stack haddock --open .
+```

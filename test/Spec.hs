@@ -254,16 +254,25 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
         ]
     , TestLabel "Should Reject Code With unprotected SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
-            let code = [PUSH1 (pack [0x4]), PUSH1 (pack [0x0]), SSTORE]
+            -- This is example code that consists of a single unprotected SSTORE
+            -- call.
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH1 (pack [0x0])
+                    , SSTORE
+                    ]
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
         , TestLabel "\"Storer\"" $ TestCase $ do
-            -- Read in the test data file
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
             bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
         ]
     , TestLabel "Should Pass Code With protected SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
+            -- This is example code that consists of a single protected SSTORE
+            -- call.
             let code =
                     [ PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
                     , DUP2 -- duplicate store address for comparison
@@ -278,7 +287,9 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
                     ]
             assertBool "Protected stored calls should pass store checker" (checkStores code)
         , TestLabel "\"StoreProtetectedInline\"" $ TestCase $ do
-            -- Read in the test data file
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single SSTORE call, with all of the
+            -- necessary protection code entered in Solidity assembly.
             bsDecoded <- compileSolidityFile "test/Models/Protection/StorerProtectedInline.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Protected stored calls should pass store checker" (checkStores code)
@@ -337,7 +348,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , OpCode.Type.EQ
                     , PUSH32 (integerToEVM256 $ fromIntegral 37)
                     , SWAP1
-                    , PUSH32 (integerToEVM256 $ fromIntegral 143)
+                    , PUSH32 (integerToEVM256 $ fromIntegral 142)
                     , JUMPI
                     ] ++
                     [ JUMPDEST
@@ -346,6 +357,79 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , JUMP
                     ]
             assertEqual "Table should be added" expected (transform code)
+        , TestLabel "Should insert additional opcodes to code with SSTORE (no jump)" $ TestCase $ do
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH1 (pack [0x4])
+                    , SSTORE
+                    ]
+                expected =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH1 (pack [0x4])
+                    , PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
+                    , DUP2 -- duplicate store address for comparison
+                    , OpCode.Type.LT -- see if address is lower than the lower limit
+                    , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
+                    , DUP3 -- duplicate store address for comparison
+                    , OpCode.Type.GT -- see if the store address is higher than the upper limit
+                    , OR -- set top of stack to 1 if either is true
+                    , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+                    , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+                    , SSTORE -- perform the store
+                    ]
+                transformed = transform code
+            assertEqual "The length should be increased appropriately" (length expected) (length transformed)
+            assertEqual "The inserted code should be as expected" expected transformed
+        , TestLabel "Should insert additional opcodes to code with SSTORE (plus a jump)" $ TestCase $ do
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH1 (pack [0x4])
+                    , SSTORE
+                    , PUSH1 (pack [0x9])
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    , PUSH1 (pack [0x4])
+                    , POP
+                    ]
+                expected =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH1 (pack [0x4])
+                    , PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
+                    , DUP2 -- duplicate store address for comparison
+                    , OpCode.Type.LT -- see if address is lower than the lower limit
+                    , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
+                    , DUP3 -- duplicate store address for comparison
+                    , OpCode.Type.GT -- see if the store address is higher than the upper limit
+                    , OR -- set top of stack to 1 if either is true
+                    , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+                    , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+                    , SSTORE -- perform the store
+                    , PUSH1 (pack [0x9])
+                    , PUSH32 (pack [119])
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    , PUSH1 (pack [0x4])
+                    , POP
+                    ] ++
+                    [ JUMPDEST ] ++
+                    [ DUP1
+                    , PUSH32 (integerToEVM256 $ fromIntegral 9)
+                    , OpCode.Type.EQ
+                    , PUSH32 (integerToEVM256 $ fromIntegral 115)
+                    , SWAP1
+                    , PUSH32 (integerToEVM256 $ fromIntegral 223)
+                    , JUMPI
+                    ] ++
+                    [ JUMPDEST
+                    , SWAP1
+                    , POP
+                    , JUMP
+                    ]
+                transformed = transform code
+            -- assertEqual "The inserted code should be as expected" expected transformed
+            assertEqual "The inserted code should be as expected" (countCodes expected) (countCodes transformed)
         ]
     -- , TestLabel "Append OpCodes" $ TestList $
     --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
