@@ -20,10 +20,14 @@ import qualified Data.Map as Map
 import OpCode.Type
 import OpCode.Utils
 
-import Debug.Trace
+import Numeric.Natural
+
+defaultCaps = Capabilities
+    { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
+    }
 
 transform :: [OpCode] -> [OpCode]
-transform opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections $ countCodes opCodes
+transform opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes opCodes
 
 type CountedOpCode = (OpCode, Maybe Integer)
 
@@ -66,12 +70,15 @@ jumpDestinations codes = foldl func [] codes where
 
 -- presumes that result doesn't contain JUMP and JUMPDEST opcodes
 -- |See specification docs in the BeakerOS repository (https://github.com/DaoLab/beakeros/docs/0.1v/store-protect.md).
-protectCall :: OpCode -> [OpCode]
-protectCall SSTORE =
-    [ PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
+protectCall
+    :: Capabilities-- ^Highest permissable address
+    -> OpCode -- ^The opcode being protected
+    -> [OpCode]
+protectCall caps SSTORE =
+    [ PUSH32 $ integerToEVM256 ll -- lower limit
     , DUP2 -- duplicate store address for comparison
     , OpCode.Type.LT -- see if address is lower than the lower limit
-    , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
+    , PUSH32 $ integerToEVM256 ul -- upper limit
     , DUP3 -- duplicate store address for comparison
     , OpCode.Type.GT -- see if the store address is higher than the upper limit
     , OR -- set top of stack to 1 if either is true
@@ -79,16 +86,51 @@ protectCall SSTORE =
     , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
     , SSTORE -- perform the store
     ]
-protectCall code = [code]
+    where
+        (ll,ul) = caps_storageRange caps
+protectCall _ code = [code]
 
-insertProtections :: [CountedOpCode] -> [CountedOpCode]
-insertProtections codes = codes >>= (\ccode -> case ccode of
-    (SSTORE, _) -> fmap (\c -> (c, Nothing)) (protectCall SSTORE)
-    (opCode, n) -> fmap (\c -> (c, n)) (protectCall opCode)
+data Capabilities = Capabilities
+    { caps_storageRange :: (Natural, Natural)
+    }
+
+insertProtections :: Capabilities -> [CountedOpCode] -> [CountedOpCode]
+insertProtections caps codes = codes >>= (\ccode -> case ccode of
+    (SSTORE, _) -> fmap (\c -> (c, Nothing)) (protectCall caps SSTORE)
+    (opCode, n) -> fmap (\c -> (c, n)) (protectCall caps opCode)
     )
 
 data VarOpCode = Counted CountedOpCode | PushVar PushVarVal deriving (Eq, Show)
 data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
+
+type Label = String
+data AsmOpCode
+    -- |A normal OpCode that can be exported directly.
+    = Normal OpCode
+    -- |A labelled jump that will need it's offset resolved
+    | LJump JumpType Label
+    -- |A labelled jump destination
+    | LJumpDest Label
+    -- |An unlabelled jump destination that will need to use the jump table
+    | UJumpDest Integer
+    deriving (Eq, Show)
+data JumpType
+    -- |Conditional
+    = Cond
+    -- |Unconditional
+    | UnCond deriving (Eq, Show)
+
+-- asmToBytecode :: [AsmOpCode] -> [OpCode]
+-- asmToBytecode asm =
+--     where
+--         jumpTable = undefined
+--         labelMap = buildLabelMap
+--         convert (Normal JUMP) = error "JUMP not permitted here"
+--         convert (Normal JUMPDEST) = error "JUMPDEST not permitted here"
+--         convert (Normal opcode) = opcode -- Output a normal opcode verbatim
+--         convert (LJumpDest label) = JUMPDEST
+
+-- buildLabelMap
 
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
@@ -103,6 +145,17 @@ appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
         table = jumpTable (jumpDests codes)
         jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
         jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 1 - 4
+
+-- -- |Returns a tuple of the jump destination of the jump table and the code.
+-- appendJumpTableAsm :: [VarOpCode] -> [AsmOpCode]
+-- appendJumpTableAsm codes = asmcodes ++ table
+--     where
+--         asmcodes = map f codes
+--         f Counted (opcode, count) =
+--         f PushVar PushVarVal
+--         table = jumpTable (jumpDests codes)
+--         jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
+--         jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 1 - 4
 
 nBytesVar (Counted (x,_)) = nBytes x
 nBytesVar (PushVar x) = 1 + 33

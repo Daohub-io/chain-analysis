@@ -9,6 +9,7 @@ import Data.ByteString.Base16
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid (mempty)
+import qualified Data.Set as S
 
 import Numeric.Natural
 
@@ -273,11 +274,14 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
         [ TestLabel "Trivial Example" $ TestCase $ do
             -- This is example code that consists of a single protected SSTORE
             -- call.
-            let code =
-                    [ PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
+            let
+                lowerLimit = 0x0100000000000000000000000000000000000000000000000000000000000000
+                upperLimit = 0x0200000000000000000000000000000000000000000000000000000000000000
+                code =
+                    [ PUSH32 $ integerToEVM256 lowerLimit -- lower limit
                     , DUP2 -- duplicate store address for comparison
                     , OpCode.Type.LT -- see if address is lower than the lower limit
-                    , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
+                    , PUSH32 $ integerToEVM256 upperLimit -- upper limit
                     , DUP3 -- duplicate store address for comparison
                     , OpCode.Type.GT -- see if the store address is higher than the upper limit
                     , OR -- set top of stack to 1 if either is true
@@ -286,6 +290,9 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
                     , SSTORE -- perform the store
                     ]
             assertBool "Protected stored calls should pass store checker" (checkStores code)
+            assertEqual "Protected store a calls should match the required capabilities"
+                (Ranges $ S.fromList [(lowerLimit, upperLimit)])
+                (getRequiredCapabilities code)
         , TestLabel "\"StoreProtetectedInline\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single SSTORE call, with all of the
@@ -324,7 +331,10 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , STOP
                     , JUMPDEST
                     ]
-                table = jumpTable $ jumpDests $ replaceJumps $ insertProtections $ countCodes code
+                defaultCaps = Capabilities
+                    { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
+                    }
+                table = jumpTable $ jumpDests $ replaceJumps $ insertProtections defaultCaps $ countCodes code
                 table2 = jumpTable $ jumpDests $ replaceJumps $ countCodes code
                 expected = (5,[Counted (STOP, Nothing)])
             assertEqual "Table should be correct" table2 table
