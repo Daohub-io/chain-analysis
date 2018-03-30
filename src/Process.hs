@@ -103,35 +103,6 @@ insertProtections caps codes = codes >>= (\ccode -> case ccode of
 data VarOpCode = Counted CountedOpCode | PushVar PushVarVal deriving (Eq, Show)
 data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 
-type Label = String
-data AsmOpCode
-    -- |A normal OpCode that can be exported directly.
-    = Normal OpCode
-    -- |A labelled jump that will need it's offset resolved
-    | LJump JumpType Label
-    -- |A labelled jump destination
-    | LJumpDest Label
-    -- |An unlabelled jump destination that will need to use the jump table
-    | UJumpDest Integer
-    deriving (Eq, Show)
-data JumpType
-    -- |Conditional
-    = Cond
-    -- |Unconditional
-    | UnCond deriving (Eq, Show)
-
--- asmToBytecode :: [AsmOpCode] -> [OpCode]
--- asmToBytecode asm =
---     where
---         jumpTable = undefined
---         labelMap = buildLabelMap
---         convert (Normal JUMP) = error "JUMP not permitted here"
---         convert (Normal JUMPDEST) = error "JUMPDEST not permitted here"
---         convert (Normal opcode) = opcode -- Output a normal opcode verbatim
---         convert (LJumpDest label) = JUMPDEST
-
--- buildLabelMap
-
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
     j@(JUMP, _) -> [ PushVar JumpTableDest256, Counted j]
