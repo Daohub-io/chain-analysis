@@ -75,5 +75,6 @@ test-suite evm-mod-test
     , test-framework-quickcheck2
   other-modules:
       Paths_evm_mod,
+      CompileSolidity,
       Models.HandWritten
   default-language: Haskell2010

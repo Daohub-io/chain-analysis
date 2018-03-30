@@ -1,6 +1,6 @@
 pragma solidity ^0.4.17;
-
-contract StorerProtected {
+// this contract is inline, and all the jumps are statically resolved before injection
+contract StorerProtectedInline {
     function store() public {
         uint256 loo = 1234;
         uint256 lowerLimit = 0x0100000000000000000000000000000000000000000000000000000000000000;
@@ -9,15 +9,7 @@ contract StorerProtected {
                 mload(loo) // value to store
                 0x0100000100000000000000000000000000000000000000000000000000000000 // address to store
                 // This code is necessary in front of an SSTORE to pass verification
-                here
-                storeProc
-                jump
-            here:
-                jump(end)
-
-            jump(storeProcEnd) // Rudimentary fall-through protection
-            storeProc:
-                swap1 // swap store address and continue address (store on top after this)
+            // injected store code
                 0x0100000000000000000000000000000000000000000000000000000000000000 // lower limit
                 dup2 // duplicate store address for comparison
                 lt // see if address is lower than the lower limit
@@ -25,19 +17,9 @@ contract StorerProtected {
                 dup3 // duplicate store address for comparison
                 gt // see if the store address is higher than the upper limit
                 or // set top of stack to 1 if either is true
-                excAddress // push the exception address
-                jumpi // jump to exception if SSTORE is out of pounds
-                swap1 // to put the continue address
-                swap2 //      under the two SSTORE arguments
-                swap1 //
+                pc // push the program counter to the stack, this is guaranteed to be an invalid jump destination
+                jumpi // jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
                 sstore // perform the store
-                jump // return to the call site and continue
-            excAddress:
-                0x0
-                0x0
-                revert
-            storeProcEnd: // For fall-through protection
-            end:
         }
     }
 }

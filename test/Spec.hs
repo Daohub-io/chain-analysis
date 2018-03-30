@@ -27,6 +27,7 @@ import OpCode.Parser
 import OpCode.Type
 import Process
 import OpCode.Utils
+import CompileSolidity
 import Models.HandWritten
 
 import Data.List
@@ -264,18 +265,21 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
     , TestLabel "Should Pass Code With protected SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
             let code =
-                    [ PUSH2 (pack [0x92, 0x93])
-                    , PUSH32 (pack [0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-                    , PUSH1 (pack [0x64])
-                    , PUSH1 (pack [0x40])
-                    , MLOAD
-                    , MSTORE
-                    , SSTORE
+                    [ PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
+                    , DUP2 -- duplicate store address for comparison
+                    , OpCode.Type.LT -- see if address is lower than the lower limit
+                    , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
+                    , DUP3 -- duplicate store address for comparison
+                    , OpCode.Type.GT -- see if the store address is higher than the upper limit
+                    , OR -- set top of stack to 1 if either is true
+                    , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+                    , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+                    , SSTORE -- perform the store
                     ]
             assertBool "Protected stored calls should pass store checker" (checkStores code)
-        , TestLabel "\"StoreProtetected\"" $ TestCase $ do
+        , TestLabel "\"StoreProtetectedInline\"" $ TestCase $ do
             -- Read in the test data file
-            bsDecoded <- compileSolidityFile "test/Models/Protection/StorerProtected.sol"
+            bsDecoded <- compileSolidityFile "test/Models/Protection/StorerProtectedInline.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Protected stored calls should pass store checker" (checkStores code)
         ]
@@ -390,22 +394,3 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
     --         undefined
     --     ]
     ]
-
-compileSolidityFile :: FilePath -> IO B.ByteString
-compileSolidityFile path = withSystemTempDirectory "solc-comp" $ \tempdir -> do
-    (_, Just hout, _, hndl) <-
-        createProcess (proc "node" ["node_modules/solc/solcjs", path, "--bin", "--output-dir", tempdir])
-            { std_out = CreatePipe }
-    exitCode <- waitForProcess hndl
-    -- We are assuming this is the contract name
-    let contractName = takeBaseName path
-    bytecodeHex <- B.readFile (joinPath [tempdir, mangleFilename path ++ "_sol_" ++ contractName ++ ".bin"])
-    let (bytecode,_) = decode bytecodeHex
-    pure bytecode
-
-mangleFilename :: FilePath -> String
-mangleFilename path =
-    let
-        withoutExtension = dropExtension path
-        filepathPieces = splitDirectories withoutExtension
-    in intercalate "_" filepathPieces

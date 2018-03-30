@@ -67,7 +67,18 @@ jumpDestinations codes = foldl func [] codes where
 -- presumes that result doesn't contain JUMP and JUMPDEST opcodes
 -- TODO: move somewhere and implement
 protectCall :: OpCode -> [OpCode]
-protectCall SSTORE = [PUSH1 (pack [0x64]), POP, SSTORE] -- TODO: only dummy code
+protectCall SSTORE =
+    [ PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
+    , DUP2 -- duplicate store address for comparison
+    , OpCode.Type.LT -- see if address is lower than the lower limit
+    , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
+    , DUP3 -- duplicate store address for comparison
+    , OpCode.Type.GT -- see if the store address is higher than the upper limit
+    , OR -- set top of stack to 1 if either is true
+    , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+    , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+    , SSTORE -- perform the store
+    ]
 protectCall code = [code]
 
 insertProtections :: [CountedOpCode] -> [CountedOpCode]

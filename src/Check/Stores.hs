@@ -1,23 +1,30 @@
 module Check.Stores where
 
 import OpCode.Type
+import OpCode.Utils
 import Data.ByteString (pack)
 
 checkStores :: [OpCode] -> Bool
-checkStores (a:b:c:d:e)
-    | any isSSTORE [a,b,c,d] = False
-    | otherwise = checkStores' (a:b:c:d:e)
+checkStores (a:b:c:d:e:f:g:h:i:cs)
+    | any isSSTORE [a,b,c,d,e,f,g,h,i] = False
+    | otherwise = checkStores' (a:b:c:d:e:f:g:h:i:cs)
 checkStores cs = not $ hasSSTORE cs
 
 checkStores' :: [OpCode] -> Bool
-checkStores' (a:b:c:d:e:cs)
-    | not (isSSTORE e) = checkStores' (b:c:d:e:cs)
+checkStores' (a:b:c:d:e:f:g:h:i:j:cs)
+    | not (isSSTORE j) = checkStores' (b:c:d:e:f:g:h:i:j:cs)
     | otherwise = and
-        [ a == PUSH1 (pack [0x64])
-        , b == PUSH1 (pack [0x40])
-        , c == MLOAD
-        , d == MSTORE
-        ]
+        [ a == (PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000) -- lower limit
+        , b == DUP2 -- duplicate store address for comparison
+        , c == OpCode.Type.LT -- see if address is lower than the lower limit
+        , d == (PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000) -- upper limit
+        , e == DUP3 -- duplicate store address for comparison
+        , f == OpCode.Type.GT -- see if the store address is higher than the upper limit
+        , g == OR -- set top of stack to 1 if either is true
+        , h == PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+        , i == JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+        , j == SSTORE -- perform the store
+        ] && checkStores' (b:c:d:e:f:g:h:i:j:cs)
 checkStores' _ = True
 
 isSSTORE :: OpCode -> Bool
