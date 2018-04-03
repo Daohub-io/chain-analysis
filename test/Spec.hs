@@ -440,6 +440,14 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 transformed = transform code
             -- assertEqual "The inserted code should be as expected" expected transformed
             assertEqual "The inserted code should be as expected" (countCodes expected) (countCodes transformed)
+        , TestLabel "\"Storer\"" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
+            code <- parseGoodExample bsDecoded
+            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+            -- after transformation it should pass store checker
+            assertBool "After transformation should pass store checker" (checkStores $ transform code)
         ]
     -- , TestLabel "Append OpCodes" $ TestList $
     --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
