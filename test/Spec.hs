@@ -1,15 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 module Main where
 
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as C8 (pack)
-import Data.ByteString.Base16
+import qualified Data.ByteString.Char8 as C8 (pack, unpack)
+import Data.ByteString.Base16 as B16
 import qualified Data.Map as M
 import Data.Maybe
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, (<>))
 import qualified Data.Set as S
+import Blockchain.Data.RLP
 
 import Numeric.Natural
 
@@ -31,7 +33,16 @@ import OpCode.Utils
 import CompileSolidity
 import Models.HandWritten
 
+import Network.Ethereum.Web3
+import Network.Ethereum.Web3.Web3
+import Network.Ethereum.Web3.JsonAbi as JsonAbi
+-- import Network.Ethereum.Web3.TH
+import Network.Ethereum.Web3.Types
+import Network.Ethereum.Web3.Eth as Eth
+
 import Data.List
+import Data.Text (Text)
+import qualified Data.Text as T
 
 import System.Directory
 import System.Environment
@@ -66,7 +77,8 @@ mainWithOpts = do
     defaultMainWithOpts tests my_runner_opts
 
 tests =
-    [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
+    [
+        testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
     , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
@@ -75,7 +87,48 @@ tests =
     , testGroup "Checks" $ (hUnitTestToTests storeCheckerTests)
     , testGroup "Number" $ (hUnitTestToTests numberTests)
     , testProperty "Round-Trip Natural to Bytecode" prop_integerToEVM256_roundTrip
+    ,
+    testGroup "Web3" $ hUnitTestToTests web3Tests
     ]
+
+-- |This is a test of tests to ensure the methodology for web3 testing is
+-- correct.
+web3Tests = TestLabel "Web3" $ TestCase $ do
+    bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
+    let bsEncoded = B16.encode bsDecoded
+    (Right availableAccounts) <- runWeb3 accounts
+    let sender = availableAccounts !! 1
+    (Right (res, tx)) <- runWeb3 $ do
+        let details = (Call {
+                callFrom = Just sender,
+                callTo = Nothing,
+                callGas = Just 300000,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
+            })
+        theCall <- Eth.call details Latest
+        theEffect <- Eth.sendTransaction details
+        pure (theCall, theEffect)
+    (Right (Just newContractAddress)) <- runWeb3 $ do
+        r <- getTransactionReceipt tx
+        pure $ txrContractAddress r
+    (Right (res)) <- runWeb3 $ do
+        let details = (Call {
+                callFrom = Just sender,
+                callTo = Just newContractAddress,
+                callGas = Nothing,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just ((JsonAbi.methodId (DFunction "add" False
+                    [ FunctionArg "a" "uint256"
+                    , FunctionArg "b" "uint256"
+                    ] (Just [FunctionArg "" "uint256"]))) <> "0000000000000000000000000000000000000000000000000000000000000045" <> "0000000000000000000000000000000000000000000000000000000000000001")
+            })
+
+        theCall <- Eth.call details Latest
+        pure (theCall)
+    assertEqual "Result" "0x0000000000000000000000000000000000000000000000000000000000000046" res
 
 numberTests = TestLabel "Numbers" $ TestList
     [ naturalRoundTrip 0x00
@@ -221,11 +274,11 @@ parserTests = TestLabel "OpCode Parser" $ TestList $
     , TestLabel "Should Parse Compiled Examples" $ TestList $
         [ TestLabel "Should Parse \"Storer\"" $ TestCase $ do
             -- Read in the test data file
-            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Storer.sol"
             parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\"" $ TestCase $ do
             -- Read in the test data file
-            bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
             parseGoodExample bsDecoded >> pure ()
         , TestLabel "Should Parse \"Adder\" Without Swarm Metadata" $ TestCase $ do
             -- Read in the test data file
@@ -244,12 +297,12 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             assertBool "Calls without should pass store checker" (checkStores [PUSH1 (pack [0x4]), POP])
         , TestLabel "\"Adder\"" $ TestCase $ do
             -- Read in the test data file
-            bsDecoded <- compileSolidityFile "test/Models/Adder.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls without should pass store checker" (checkStores code)
         , TestLabel "\"Fib\"" $ TestCase $ do
             -- Read in the test data file
-            bsDecoded <- compileSolidityFile "test/Models/Fib.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Fib.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls without should pass store checker" (checkStores code)
         ]
@@ -266,7 +319,7 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Storer.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
         ]
@@ -297,7 +350,7 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single SSTORE call, with all of the
             -- necessary protection code entered in Solidity assembly.
-            bsDecoded <- compileSolidityFile "test/Models/Protection/StorerProtectedInline.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Protection/StorerProtectedInline.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Protected stored calls should pass store checker" (checkStores code)
         ]
@@ -443,7 +496,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFile "test/Models/Storer.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/Storer.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
             -- after transformation it should pass store checker
@@ -451,12 +504,158 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         , TestLabel "\"StorerWithAdd\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFile "test/Models/StorerWithAdd.sol"
+            bsDecoded <- compileSolidityFileBin "test/Models/StorerWithAdd.sol"
             code <- parseGoodExample bsDecoded
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
             -- after transformation it should pass store checker
             assertBool "After transformation should pass store checker" (checkStores $ transform code)
+        , TestLabel "\"StorerWithAdd\" on chain" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            bsDecoded <- compileSolidityFileBin "test/Models/StorerWithAdd.sol"
+            let bsEncoded = B16.encode bsDecoded
+            (Right availableAccounts) <- runWeb3 accounts
+            let sender = availableAccounts !! 1
+            (Right (res, tx)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Nothing,
+                        callGas = Just 300000,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
+                    })
+                theCall <- Eth.call details Latest
+                theEffect <- Eth.sendTransaction details
+                pure (theCall, theEffect)
+            (Right (Just newContractAddress)) <- runWeb3 $ do
+                r <- getTransactionReceipt tx
+                pure $ txrContractAddress r
+            (Right (res)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "storeWithAdd" False
+                            [ FunctionArg "a" "uint256"
+                            , FunctionArg "b" "uint256"
+                            ] (Just [FunctionArg "" "uint256"]))) <> "0000000000000000000000000000000000000000000000000000000000000045" <> "0000000000000000000000000000000000000000000000000000000000000001")
+                    })
+
+                theCall <- Eth.call details Latest
+                pure (theCall)
+            assertEqual "Result" "0x0000000000000000000000000000000000000000000000000000000000000046" res
+        , TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            bsDecoded <- compileSolidityFileBin "test/Models/StorerAndGetter.sol"
+            let bsEncoded = B16.encode bsDecoded
+            (Right availableAccounts) <- runWeb3 accounts
+            let sender = availableAccounts !! 1
+            (Right (res, tx)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Nothing,
+                        callGas = Just 300000,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
+                    })
+                theCall <- Eth.call details Latest
+                theEffect <- Eth.sendTransaction details
+                pure (theCall, theEffect)
+            (Right (Just newContractAddress)) <- runWeb3 $ do
+                r <- getTransactionReceipt tx
+                pure $ txrContractAddress r
+            let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
+            -- Use a call (send a transaction) to "store" to set a particular value
+            (Right (storeRes)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "store" False
+                            [ FunctionArg "loo" "uint256"
+                            ] Nothing)) <> testValue)
+                    })
+                theCall <- Eth.sendTransaction details
+                pure (theCall)
+            assertBool "Store Result" ("0x0" /= storeRes)
+
+            --  Use a call to "get" to ensure that the stored value has been correctly set.
+            (Right (getRes)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "get" False
+                            [] (Just [FunctionArg "d" "uint256"]))))
+                    })
+                theCall <- Eth.call details Latest
+                pure (theCall)
+            assertEqual "Result" ("0x" <> testValue) getRes
+        , TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            bsDecoded <- compileSolidityFileBin "test/Models/StorerAndGetter.sol"
+            bytecode <- parseGoodExample bsDecoded :: IO [OpCode]
+            let bsEncoded = B16.encode $ B.concat $ map toByteString $ bytecode
+            (Right availableAccounts) <- runWeb3 accounts
+            let sender = availableAccounts !! 1
+            (Right (res, tx)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Nothing,
+                        callGas = Just 300000,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
+                    })
+                theCall <- Eth.call details Latest
+                theEffect <- Eth.sendTransaction details
+                pure (theCall, theEffect)
+            (Right (Just newContractAddress)) <- runWeb3 $ do
+                r <- getTransactionReceipt tx
+                pure $ txrContractAddress r
+            let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
+            -- Use a call (send a transaction) to "store" to set a particular value
+            (Right (storeRes)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "store" False
+                            [ FunctionArg "loo" "uint256"
+                            ] Nothing)) <> testValue)
+                    })
+                theCall <- Eth.sendTransaction details
+                pure (theCall)
+            assertBool "Store Result" ("0x0" /= storeRes)
+
+            --  Use a call to "get" to ensure that the stored value has been correctly set.
+            (Right (getRes)) <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "get" False
+                            [] (Just [FunctionArg "d" "uint256"]))))
+                    })
+                theCall <- Eth.call details Latest
+                pure (theCall)
+            assertEqual "Result" ("0x" <> testValue) getRes
         ]
+
     -- , TestLabel "Append OpCodes" $ TestList $
     --     [ TestLabel "Should Produce Valid Code" $ TestCase $ do
     --         undefined

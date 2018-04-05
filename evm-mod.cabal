@@ -68,11 +68,14 @@ test-suite evm-mod-test
     , filepath
     , process
     , temporary
+    , text
     , HUnit
     , QuickCheck
     , test-framework
     , test-framework-hunit
     , test-framework-quickcheck2
+    , web3
+    , ethereum-rlp
   other-modules:
       Paths_evm_mod,
       CompileSolidity,
