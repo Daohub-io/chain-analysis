@@ -566,9 +566,12 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 theCall <- Eth.call details Latest
                 theEffect <- Eth.sendTransaction details
                 pure (theCall, theEffect)
-            (Right (Just newContractAddress)) <- runWeb3 $ do
+            x <- runWeb3 $ do
                 r <- getTransactionReceipt tx
                 pure $ txrContractAddress r
+            let (Just newContractAddress) = case x of
+                    Left e -> error (show e)
+                    Right y -> y
             let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
             -- Use a call (send a transaction) to "store" to set a particular value
             (Right (storeRes)) <- runWeb3 $ do

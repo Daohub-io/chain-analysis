@@ -1,0 +1,3 @@
+[submodule "hs-web3"]
+	path = hs-web3
+	url = git@github.com:Daolab/hs-web3.git
