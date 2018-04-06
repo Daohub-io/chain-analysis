@@ -26,7 +26,6 @@ compileSolidityFileABI path = withSystemTempDirectory "solc-comp" $ \tempdir -> 
 
 compileSolidityFile :: CompileType -> FilePath -> IO B.ByteString
 compileSolidityFile compileType path = withSystemTempDirectory "solc-comp" $ \tempdir -> do
-    let tempdir = "tt"
     let (compileArg, outExt) = case compileType of
             Bin -> ("--bin", ".bin")
             ABI -> ("--abi", ".abi")
