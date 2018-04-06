@@ -77,8 +77,7 @@ mainWithOpts = do
     defaultMainWithOpts tests my_runner_opts
 
 tests =
-    [
-        testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
+    [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
     , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
     , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
@@ -87,8 +86,7 @@ tests =
     , testGroup "Checks" $ (hUnitTestToTests storeCheckerTests)
     , testGroup "Number" $ (hUnitTestToTests numberTests)
     , testProperty "Round-Trip Natural to Bytecode" prop_integerToEVM256_roundTrip
-    ,
-    testGroup "Web3" $ hUnitTestToTests web3Tests
+    , testGroup "Web3" $ hUnitTestToTests web3Tests
     ]
 
 -- |This is a test of tests to ensure the methodology for web3 testing is
@@ -110,9 +108,13 @@ web3Tests = TestLabel "Web3" $ TestCase $ do
         theCall <- Eth.call details Latest
         theEffect <- Eth.sendTransaction details
         pure (theCall, theEffect)
-    (Right (Just newContractAddress)) <- runWeb3 $ do
+    contractAddressResult <- runWeb3 $ do
         r <- getTransactionReceipt tx
         pure $ txrContractAddress r
+    newContractAddress <- case contractAddressResult of
+            Left e -> assertFailure (show e)
+            Right (Just x) -> pure x
+            Right Nothing -> assertFailure "No new contract address was returned"
     (Right (res)) <- runWeb3 $ do
         let details = (Call {
                 callFrom = Just sender,
@@ -608,7 +610,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             -- Solidity contract with a single unprotected SSTORE call.
             bsDecoded <- compileSolidityFileBin "test/Models/StorerAndGetter.sol"
             bytecode <- parseGoodExample bsDecoded :: IO [OpCode]
-            let bsEncoded = B16.encode $ B.concat $ map toByteString $ bytecode
+            let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform bytecode
             (Right availableAccounts) <- runWeb3 accounts
             let sender = availableAccounts !! 1
             (Right (res, tx)) <- runWeb3 $ do
@@ -644,7 +646,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             assertBool "Store Result" ("0x0" /= storeRes)
 
             --  Use a call to "get" to ensure that the stored value has been correctly set.
-            (Right (getRes)) <- runWeb3 $ do
+            getResRaw <- runWeb3 $ do
                 let details = (Call {
                         callFrom = Just sender,
                         callTo = Just newContractAddress,
@@ -656,6 +658,9 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     })
                 theCall <- Eth.call details Latest
                 pure (theCall)
+            getRes <- case getResRaw of
+                Left e -> assertFailure $ show e
+                Right x -> pure x
             assertEqual "Result" ("0x" <> testValue) getRes
         ]
 
