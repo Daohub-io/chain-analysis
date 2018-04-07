@@ -5,7 +5,7 @@ import OpCode.Type
 import Prelude hiding (LT, EQ, GT)
 
 import Control.Applicative
-import Data.ByteString
+import Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import Data.Attoparsec.ByteString as A
 -- import Data.Attoparsec.Binary
@@ -17,6 +17,11 @@ import Data.Word
 import Control.Monad
 
 import Test.QuickCheck
+
+pad i bs =
+  let diff = i - (B.length bs)
+      pads = B.replicate diff 0x00
+  in pads `B.append` bs
 
 toByteString :: OpCode -> ByteString
 toByteString STOP = pack [0x00]
@@ -82,38 +87,38 @@ toByteString MSIZE = pack [0x59]
 toByteString GAS = pack [0x5a]
 toByteString JUMPDEST = pack [0x5b]
 
-toByteString (PUSH1 bs) = cons 0x60 bs
-toByteString (PUSH2 bs) = cons 0x61 bs
-toByteString (PUSH3 bs) = cons 0x62 bs
-toByteString (PUSH4 bs) = cons 0x63 bs
-toByteString (PUSH5 bs) = cons 0x64 bs
-toByteString (PUSH6 bs) = cons 0x65 bs
-toByteString (PUSH7 bs) = cons 0x66 bs
-toByteString (PUSH8 bs) = cons 0x67 bs
-toByteString (PUSH9 bs) = cons 0x68 bs
-toByteString (PUSH10 bs) = cons 0x69 bs
-toByteString (PUSH11 bs) = cons 0x6a bs
-toByteString (PUSH12 bs) = cons 0x6b bs
-toByteString (PUSH13 bs) = cons 0x6c bs
-toByteString (PUSH14 bs) = cons 0x6d bs
-toByteString (PUSH15 bs) = cons 0x6e bs
-toByteString (PUSH16 bs) = cons 0x6f bs
-toByteString (PUSH17 bs) = cons 0x70 bs
-toByteString (PUSH18 bs) = cons 0x71 bs
-toByteString (PUSH19 bs) = cons 0x72 bs
-toByteString (PUSH20 bs) = cons 0x73 bs
-toByteString (PUSH21 bs) = cons 0x74 bs
-toByteString (PUSH22 bs) = cons 0x75 bs
-toByteString (PUSH23 bs) = cons 0x76 bs
-toByteString (PUSH24 bs) = cons 0x77 bs
-toByteString (PUSH25 bs) = cons 0x78 bs
-toByteString (PUSH26 bs) = cons 0x79 bs
-toByteString (PUSH27 bs) = cons 0x7a bs
-toByteString (PUSH28 bs) = cons 0x7b bs
-toByteString (PUSH29 bs) = cons 0x7c bs
-toByteString (PUSH30 bs) = cons 0x7d bs
-toByteString (PUSH31 bs) = cons 0x7e bs
-toByteString (PUSH32 bs) = cons 0x7f bs
+toByteString (PUSH1 bs) = cons 0x60 $ pad 1 bs
+toByteString (PUSH2 bs) = cons 0x61 $ pad 2 bs
+toByteString (PUSH3 bs) = cons 0x62 $ pad 3 bs
+toByteString (PUSH4 bs) = cons 0x63 $ pad 4 bs
+toByteString (PUSH5 bs) = cons 0x64 $ pad 5 bs
+toByteString (PUSH6 bs) = cons 0x65 $ pad 6 bs
+toByteString (PUSH7 bs) = cons 0x66 $ pad 7 bs
+toByteString (PUSH8 bs) = cons 0x67 $ pad 8 bs
+toByteString (PUSH9 bs) = cons 0x68 $ pad 9 bs
+toByteString (PUSH10 bs) = cons 0x69 $ pad 10 bs
+toByteString (PUSH11 bs) = cons 0x6a $ pad 11 bs
+toByteString (PUSH12 bs) = cons 0x6b $ pad 12 bs
+toByteString (PUSH13 bs) = cons 0x6c $ pad 13 bs
+toByteString (PUSH14 bs) = cons 0x6d $ pad 14 bs
+toByteString (PUSH15 bs) = cons 0x6e $ pad 15 bs
+toByteString (PUSH16 bs) = cons 0x6f $ pad 16 bs
+toByteString (PUSH17 bs) = cons 0x70 $ pad 17 bs
+toByteString (PUSH18 bs) = cons 0x71 $ pad 18 bs
+toByteString (PUSH19 bs) = cons 0x72 $ pad 19 bs
+toByteString (PUSH20 bs) = cons 0x73 $ pad 20 bs
+toByteString (PUSH21 bs) = cons 0x74 $ pad 21 bs
+toByteString (PUSH22 bs) = cons 0x75 $ pad 22 bs
+toByteString (PUSH23 bs) = cons 0x76 $ pad 23 bs
+toByteString (PUSH24 bs) = cons 0x77 $ pad 24 bs
+toByteString (PUSH25 bs) = cons 0x78 $ pad 25 bs
+toByteString (PUSH26 bs) = cons 0x79 $ pad 26 bs
+toByteString (PUSH27 bs) = cons 0x7a $ pad 27 bs
+toByteString (PUSH28 bs) = cons 0x7b $ pad 28 bs
+toByteString (PUSH29 bs) = cons 0x7c $ pad 29 bs
+toByteString (PUSH30 bs) = cons 0x7d $ pad 30 bs
+toByteString (PUSH31 bs) = cons 0x7e $ pad 31 bs
+toByteString (PUSH32 bs) = cons 0x7f $ pad 32 bs
 
 toByteString DUP1 = pack [0x80]
 toByteString DUP2 = pack [0x81]

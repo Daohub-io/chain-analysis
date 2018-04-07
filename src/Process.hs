@@ -105,7 +105,8 @@ data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
-    j@(JUMP, _) -> [ PushVar JumpTableDest256, Counted j]
+    j@(JUMP, Just _) -> [ PushVar JumpTableDest256, Counted j]
+    j@(JUMPI, Just _) -> [ Counted (SWAP1, Nothing), PushVar JumpTableDest256, Counted j]
     _ -> [Counted ccode])
     )
 
@@ -115,7 +116,7 @@ appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
     where
         table = jumpTable (jumpDests codes)
         jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
-        jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 1 - 4
+        jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 4
 
 -- -- |Returns a tuple of the jump destination of the jump table and the code.
 -- appendJumpTableAsm :: [VarOpCode] -> [AsmOpCode]
@@ -129,7 +130,7 @@ appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
 --         jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 1 - 4
 
 nBytesVar (Counted (x,_)) = nBytes x
-nBytesVar (PushVar x) = 1 + 33
+nBytesVar (PushVar x) = 1 + 32
 -- add tail like
 -- pushVar tailJumpDest
 -- pop = pop()

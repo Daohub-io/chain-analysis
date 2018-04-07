@@ -6,6 +6,10 @@ import Data.ByteString (pack)
 import Numeric.Natural
 import qualified Data.Set as S
 
+import Data.List (find)
+
+import Process (countCodes)
+
 data StorageRange = Any | Ranges (S.Set (Natural, Natural)) deriving (Eq, Show)
 
 -- |Currently just gets address ranges
@@ -112,3 +116,111 @@ hasSSTORE [] = False
 --     , REVERT
 --     , JUMPDEST -- storeProcEnd
 --     ]
+
+-- |Checks all the statically resolvable jumps, and ensures they lie on
+-- JUMPDESTs. Returns a list of problematic OpCodes
+checkStaticJumps :: [OpCode] -> [(Int, FindResult)]
+checkStaticJumps opcodes = checkStaticJumps' [] (countCodes opcodes) (countCodes opcodes)
+
+checkStaticJumps' errs opcodes ((o1,c1):(o2,c2):os)
+    | (isJUMP o2 || isJUMPI o2) && (isPush o1) =
+        let pushVal = getPushVal o1
+            errs' = case findCount (fromIntegral pushVal) opcodes of
+                Found (JUMPDEST, _) -> errs
+                ib@(Found a) -> ((fromIntegral pushVal),(FoundButWrong a)):errs
+                ib@TooHigh -> ((fromIntegral pushVal),ib):errs -- error $ "Could not find index " ++ show pushVal ++ " at " ++ show c2 ++ ", last value " ++ show (last opcodes)
+                ib@(InBetween a b) -> ((fromIntegral pushVal),ib):errs
+        in  checkStaticJumps' errs' opcodes ((o2,c2):os)
+    | otherwise = checkStaticJumps' errs opcodes ((o2,c2):os)
+checkStaticJumps' errs _ [_] = errs
+checkStaticJumps' errs _ [] = errs
+
+data FindResult
+    = Found (OpCode, Maybe Integer)
+    | FoundButWrong (OpCode, Maybe Integer)
+    | InBetween (OpCode, Maybe Integer) (OpCode, Maybe Integer)
+    | TooHigh deriving (Show, Eq)
+findCount :: Integer -> [(OpCode, Maybe Integer)] -> FindResult
+findCount c (o1@(_,Just c1):o2@(_,Just c2):os)
+    | c == c1 = Found o1
+    | c == c2 = Found o2
+    | c > c1 && c < c2 = InBetween o1 o2
+    | c < c1 = error "should not occur"
+    | otherwise = findCount c (o2:os)
+findCount c [_] = TooHigh
+
+isJUMP JUMP = True
+isJUMP _ = False
+
+isJUMPI JUMPI = True
+isJUMPI _ = False
+
+getPushVal :: OpCode -> Natural
+getPushVal (PUSH1 v) = evm256ToInteger v
+getPushVal (PUSH2 v) = evm256ToInteger v
+getPushVal (PUSH3 v) = evm256ToInteger v
+getPushVal (PUSH4 v) = evm256ToInteger v
+getPushVal (PUSH5 v) = evm256ToInteger v
+getPushVal (PUSH6 v) = evm256ToInteger v
+getPushVal (PUSH7 v) = evm256ToInteger v
+getPushVal (PUSH8 v) = evm256ToInteger v
+getPushVal (PUSH9 v) = evm256ToInteger v
+getPushVal (PUSH10 v) = evm256ToInteger v
+getPushVal (PUSH11 v) = evm256ToInteger v
+getPushVal (PUSH12 v) = evm256ToInteger v
+getPushVal (PUSH13 v) = evm256ToInteger v
+getPushVal (PUSH14 v) = evm256ToInteger v
+getPushVal (PUSH15 v) = evm256ToInteger v
+getPushVal (PUSH16 v) = evm256ToInteger v
+getPushVal (PUSH17 v) = evm256ToInteger v
+getPushVal (PUSH18 v) = evm256ToInteger v
+getPushVal (PUSH19 v) = evm256ToInteger v
+getPushVal (PUSH20 v) = evm256ToInteger v
+getPushVal (PUSH21 v) = evm256ToInteger v
+getPushVal (PUSH22 v) = evm256ToInteger v
+getPushVal (PUSH23 v) = evm256ToInteger v
+getPushVal (PUSH24 v) = evm256ToInteger v
+getPushVal (PUSH25 v) = evm256ToInteger v
+getPushVal (PUSH26 v) = evm256ToInteger v
+getPushVal (PUSH27 v) = evm256ToInteger v
+getPushVal (PUSH28 v) = evm256ToInteger v
+getPushVal (PUSH29 v) = evm256ToInteger v
+getPushVal (PUSH30 v) = evm256ToInteger v
+getPushVal (PUSH31 v) = evm256ToInteger v
+getPushVal (PUSH32 v) = evm256ToInteger v
+getPushVal _ = error "Not push"
+
+isPush :: OpCode -> Bool
+isPush (PUSH1 _) = True
+isPush (PUSH2 _) = True
+isPush (PUSH3 _) = True
+isPush (PUSH4 _) = True
+isPush (PUSH5 _) = True
+isPush (PUSH6 _) = True
+isPush (PUSH7 _) = True
+isPush (PUSH8 _) = True
+isPush (PUSH9 _) = True
+isPush (PUSH10 _) = True
+isPush (PUSH11 _) = True
+isPush (PUSH12 _) = True
+isPush (PUSH13 _) = True
+isPush (PUSH14 _) = True
+isPush (PUSH15 _) = True
+isPush (PUSH16 _) = True
+isPush (PUSH17 _) = True
+isPush (PUSH18 _) = True
+isPush (PUSH19 _) = True
+isPush (PUSH20 _) = True
+isPush (PUSH21 _) = True
+isPush (PUSH22 _) = True
+isPush (PUSH23 _) = True
+isPush (PUSH24 _) = True
+isPush (PUSH25 _) = True
+isPush (PUSH26 _) = True
+isPush (PUSH27 _) = True
+isPush (PUSH28 _) = True
+isPush (PUSH29 _) = True
+isPush (PUSH30 _) = True
+isPush (PUSH31 _) = True
+isPush (PUSH32 _) = True
+isPush _ = False

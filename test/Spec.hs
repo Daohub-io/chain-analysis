@@ -2,6 +2,8 @@
 {-# LANGUAGE QuasiQuotes #-}
 module Main where
 
+import Control.Exception
+
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
 import qualified Data.ByteString as B
@@ -11,7 +13,7 @@ import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid (mempty, (<>))
 import qualified Data.Set as S
-import Blockchain.Data.RLP
+import Data.Text.Encoding
 
 import Numeric.Natural
 
@@ -92,29 +94,14 @@ tests =
 -- |This is a test of tests to ensure the methodology for web3 testing is
 -- correct.
 web3Tests = TestLabel "Web3" $ TestCase $ do
-    bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
-    let bsEncoded = B16.encode bsDecoded
+    bsEncodedFull <- compileSolidityFileBinFull "test/Models/Adder.sol"
+    let bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+        bsEncoded = B16.encode bsDecodedFull
     (Right availableAccounts) <- runWeb3 accounts
     let sender = availableAccounts !! 1
-    (Right (res, tx)) <- runWeb3 $ do
-        let details = (Call {
-                callFrom = Just sender,
-                callTo = Nothing,
-                callGas = Just 300000,
-                callGasPrice = Nothing,
-                callValue = Nothing,
-                callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
-            })
-        theCall <- Eth.call details Latest
-        theEffect <- Eth.sendTransaction details
-        pure (theCall, theEffect)
-    contractAddressResult <- runWeb3 $ do
-        r <- getTransactionReceipt tx
-        pure $ txrContractAddress r
-    newContractAddress <- case contractAddressResult of
-            Left e -> assertFailure (show e)
-            Right (Just x) -> pure x
-            Right Nothing -> assertFailure "No new contract address was returned"
+    (res, tx) <- deployContract sender bsEncoded
+    newContractAddress <- getContractAddress tx
     (Right (res)) <- runWeb3 $ do
         let details = (Call {
                 callFrom = Just sender,
@@ -358,6 +345,11 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
         ]
     ]
 
+testJumps code =
+    if not $ null $ checkStaticJumps code
+        then assertFailure $ "Static jumps not ok " ++ show (checkStaticJumps code)
+        else pure ()
+
 preprocessorTests = TestLabel "Preprocessor" $ TestList $
     -- [ TestLabel "Passthrough" $ TestList $
     --     [ TestLabel "Should Reject Invalid Code" $ TestCase $ do
@@ -443,7 +435,6 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , SSTORE -- perform the store
                     ]
                 transformed = transform code
-            assertEqual "The length should be increased appropriately" (length expected) (length transformed)
             assertEqual "The inserted code should be as expected" expected transformed
         , TestLabel "Should insert additional opcodes to code with SSTORE (plus a jump)" $ TestCase $ do
             let code =
@@ -498,41 +489,46 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFileBin "test/Models/Storer.sol"
-            code <- parseGoodExample bsDecoded
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/Storer.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/Storer.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            code <- parseGoodExample bsDecodedFull
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
             -- after transformation it should pass store checker
             assertBool "After transformation should pass store checker" (checkStores $ transform code)
         , TestLabel "\"StorerWithAdd\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFileBin "test/Models/StorerWithAdd.sol"
-            code <- parseGoodExample bsDecoded
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerWithAdd.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerWithAdd.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            code <- parseGoodExample bsDecodedFull
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
             -- after transformation it should pass store checker
             assertBool "After transformation should pass store checker" (checkStores $ transform code)
         , TestLabel "\"StorerWithAdd\" on chain" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFileBin "test/Models/StorerWithAdd.sol"
-            let bsEncoded = B16.encode bsDecoded
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerWithAdd.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerWithAdd.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            let bsEncoded = B16.encode bsDecodedFull
             (Right availableAccounts) <- runWeb3 accounts
             let sender = availableAccounts !! 1
-            (Right (res, tx)) <- runWeb3 $ do
-                let details = (Call {
-                        callFrom = Just sender,
-                        callTo = Nothing,
-                        callGas = Just 300000,
-                        callGasPrice = Nothing,
-                        callValue = Nothing,
-                        callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
-                    })
-                theCall <- Eth.call details Latest
-                theEffect <- Eth.sendTransaction details
-                pure (theCall, theEffect)
-            (Right (Just newContractAddress)) <- runWeb3 $ do
-                r <- getTransactionReceipt tx
-                pure $ txrContractAddress r
+            (res, tx) <- deployContract sender bsEncoded
+            newContractAddress <- getContractAddress tx
             (Right (res)) <- runWeb3 $ do
                 let details = (Call {
                         callFrom = Just sender,
@@ -552,28 +548,28 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         , TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFileBin "test/Models/StorerAndGetter.sol"
-            let bsEncoded = B16.encode bsDecoded
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            let bsEncoded = B16.encode bsDecodedFull
             (Right availableAccounts) <- runWeb3 accounts
             let sender = availableAccounts !! 1
-            (Right (res, tx)) <- runWeb3 $ do
-                let details = (Call {
-                        callFrom = Just sender,
-                        callTo = Nothing,
-                        callGas = Just 300000,
-                        callGasPrice = Nothing,
-                        callValue = Nothing,
-                        callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
-                    })
-                theCall <- Eth.call details Latest
-                theEffect <- Eth.sendTransaction details
-                pure (theCall, theEffect)
-            x <- runWeb3 $ do
-                r <- getTransactionReceipt tx
-                pure $ txrContractAddress r
-            let (Just newContractAddress) = case x of
-                    Left e -> error (show e)
-                    Right y -> y
+            (res, tx) <- deployContract sender bsEncoded
+            newContractAddress <- getContractAddress tx
+
+            buildCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 bsEncoded
+            writeFile "tbuildUntransformed.txt" $ unlines $ map show $ buildCode
+
+            (Right code) <- runWeb3 $ getCode newContractAddress Latest
+            actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
+            writeFile "trunUntransformed.txt" $ unlines $ map show $ actualRunCode
+
+            -- testJumps code
+            testJumps actualRunCode
             let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
             -- Use a call (send a transaction) to "store" to set a particular value
             (Right (storeRes)) <- runWeb3 $ do
@@ -608,26 +604,54 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         , TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsDecoded <- compileSolidityFileBin "test/Models/StorerAndGetter.sol"
-            bytecode <- parseGoodExample bsDecoded :: IO [OpCode]
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
+            bytecodeRuntimeRes <- Control.Exception.try $ parseGoodExample bsDecodedRunTime :: IO (Either SomeException [OpCode])
+            case bytecodeRuntimeRes of
+                Left e -> error $ show e
+                Right bytecodeRuntime -> do
+                    writeFile "trun.txt" $ unlines $ map show $ countCodes bytecodeRuntime
+                    if not $ null $ checkStaticJumps bytecodeRuntime
+                        then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
+                        else pure ()
+
+            -- mapM_ print (countCodes bytecode)
+            writeFile "t.txt" $ unlines $ map show $ countCodes bytecode
+            writeFile "ttrans.txt" $ unlines $ map show $ countCodes $ transform bytecode
+
+            -- if not $ null $ checkStaticJumps bytecode
+            --     then assertFailure $ "Static jumps not ok before transform " ++ show (checkStaticJumps bytecode)
+            --     else pure ()
             let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform bytecode
+            -- if not $ null $ checkStaticJumps bytecode
+            --     then assertFailure $ "Static jumps not ok after transform " ++ show (checkStaticJumps $ transform bytecode)
+            --     else pure ()
             (Right availableAccounts) <- runWeb3 accounts
             let sender = availableAccounts !! 1
-            (Right (res, tx)) <- runWeb3 $ do
-                let details = (Call {
-                        callFrom = Just sender,
-                        callTo = Nothing,
-                        callGas = Just 300000,
-                        callGasPrice = Nothing,
-                        callValue = Nothing,
-                        callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
-                    })
-                theCall <- Eth.call details Latest
-                theEffect <- Eth.sendTransaction details
-                pure (theCall, theEffect)
-            (Right (Just newContractAddress)) <- runWeb3 $ do
-                r <- getTransactionReceipt tx
-                pure $ txrContractAddress r
+            deployRes <- Control.Exception.try $ deployContract sender bsEncoded :: IO (Either SomeException (Text, Text))
+            let (res, tx) = case deployRes of
+                    Right x -> x
+                    Left e -> error (show e)
+            newContractAddress <- getContractAddress tx
+
+            (Right code) <- runWeb3 $ getCode newContractAddress Latest
+
+            writeFile "tbuildTransformedPre.txt" $ unlines $ map show $ countCodes $ bytecode
+            writeFile "tbuildTransformed.txt" $ unlines $ map show $ countCodes $ transform bytecode
+
+            r <- Control.Exception.try $ parseGoodExample $ fst $ B16.decode $ (\bs->B.take (B.length bs - (58 + 44)) bs) $ B.drop 2 $ encodeUtf8 code :: IO (Either SomeException [OpCode])
+            let actualRunCode = case r of
+                    Right x -> x
+                    Left e -> error (show e)
+            writeFile "trunTransformed.txt" $ unlines $ map show $ countCodes $ actualRunCode
+            -- testJumps actualRunCode
+
             let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
             -- Use a call (send a transaction) to "store" to set a particular value
             (Right (storeRes)) <- runWeb3 $ do
@@ -662,6 +686,83 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 Left e -> assertFailure $ show e
                 Right x -> pure x
             assertEqual "Result" ("0x" <> testValue) getRes
+        , TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/Adder.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/Adder.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
+            let bsEncoded = B16.encode $ B.concat $ map toByteString $ bytecode
+            (Right availableAccounts) <- runWeb3 accounts
+            let sender = availableAccounts !! 1
+            (res, tx) <- deployContract sender bsEncoded
+            newContractAddress <- getContractAddress tx
+            (Right code) <- runWeb3 $ getCode newContractAddress Latest
+            -- assertEqual "Deployed bytecode is as expected" ("0x" <> (T.pack $ C8.unpack bsEncoded)) code
+            let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
+                testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
+                testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
+            resRaw <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "add" False
+                            [ FunctionArg "a" "uint256"
+                            , FunctionArg "b" "uint256"
+                            ] (Just [FunctionArg "" "uint256"]))) <> testValueA <> testValueB)
+                    })
+                theCall <- Eth.call details Latest
+                pure (theCall)
+            case resRaw of
+                Left e -> assertFailure $ show e
+                Right res -> assertEqual "Result" ("0x" <> testValueRes) res
+        , TestLabel "\"Adder\" on chain (transformed)" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            -- bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
+            bsEncodedFull <- compileSolidityFileBinFull "test/Models/Adder.sol"
+            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/Adder.sol"
+            let
+                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+                    in if remainder == B.empty then bytes else error (show remainder)
+                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+                    in if remainder == B.empty then bytes else error (show remainder)
+            bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
+            let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform bytecode
+            (Right availableAccounts) <- runWeb3 accounts
+            let sender = availableAccounts !! 1
+            (res, tx) <- deployContract sender bsEncoded
+            newContractAddress <- getContractAddress tx
+            (Right code) <- runWeb3 $ getCode newContractAddress Latest
+            -- assertEqual "Deployed bytecode is as expected" ("0x" <> bsEncodedRunTime) code
+            let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
+                testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
+                testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
+            resRaw <- runWeb3 $ do
+                let details = (Call {
+                        callFrom = Just sender,
+                        callTo = Just newContractAddress,
+                        callGas = Nothing,
+                        callGasPrice = Nothing,
+                        callValue = Nothing,
+                        callData = Just ((JsonAbi.methodId (DFunction "add" False
+                            [ FunctionArg "a" "uint256"
+                            , FunctionArg "b" "uint256"
+                            ] (Just [FunctionArg "" "uint256"]))) <> testValueA <> testValueB)
+                    })
+                theCall <- Eth.call details Latest
+                pure (theCall)
+            case resRaw of
+                Left e -> assertFailure $ show e
+                Right res -> assertEqual "Result" ("0x" <> testValueRes) res
         ]
 
     -- , TestLabel "Append OpCodes" $ TestList $
@@ -711,3 +812,30 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
     --         undefined
     --     ]
     ]
+
+
+deployContract sender bsEncoded =  do
+    r <- runWeb3 $ do
+        let details = (Call {
+                callFrom = Just sender,
+                callTo = Nothing,
+                callGas = Just 300000,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
+            })
+        theCall <- Eth.call details Latest
+        theEffect <- Eth.sendTransaction details
+        pure (theCall, theEffect)
+    case r of
+        Left e -> assertFailure $ show e
+        Right x -> pure x
+
+getContractAddress tx = do
+    contractAddressResult <- runWeb3 $ do
+        r <- getTransactionReceipt tx
+        pure $ txrContractAddress r
+    case contractAddressResult of
+            Left e -> assertFailure (show e)
+            Right (Just x) -> pure x
+            Right Nothing -> assertFailure "No new contract address was returned"
