@@ -23,7 +23,7 @@ jobs:
             sudo apt-get -y install gcc
             sudo apt-get -y install libgmp3-dev
             stack setup --no-terminal
-            sudo apt-get -y install node
+            sudo apt-get -y install nodejs
             sudo apt-get -y install npm
             sudo npm install -g ganache-cli
       - run:
