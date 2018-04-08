@@ -16,50 +16,47 @@ data CompileType = Bin | BinRunTime deriving (Eq, Show)
 
 
 compileSolidityFileBin :: FilePath -> IO B.ByteString
-compileSolidityFileBin path =  compileSolidityFile Bin path
+compileSolidityFileBin path = do
+    text  <- compileSolidityFile Bin path
+    let (bsEncoded,rem) = B16.decode  $ encodeUtf8 text
+    if rem == B.empty then pure bsEncoded else error "decoding failed"
 
 compileSolidityFileBinRunTime :: FilePath -> IO T.Text
-compileSolidityFileBinRunTime path = do
-    (_, Just hout, Just herr, hndl) <-
-        createProcess (proc (joinPath ["solidity-windows", "solc.exe"]) ["--bin-runtime", path])
-            { std_out = CreatePipe
-            , std_err = CreatePipe }
-    exitCode <- waitForProcess hndl
-    -- print hout
-    contents <- B.hGetContents hout
-    contentsErr <- B.hGetContents herr
-    let textContent = decodeUtf8 contents
-        hexCode =if length (T.lines textContent) < 4 then error (show contents ++ show contentsErr) else T.filter (/= '\r') ((T.lines textContent) !! 3)
-    pure $ T.filter (/= '\r') hexCode
+compileSolidityFileBinRunTime path = compileSolidityFile BinRunTime path
 
 compileSolidityFileBinFull :: FilePath -> IO T.Text
-compileSolidityFileBinFull path = do
-    (_, Just hout, _, hndl) <-
-        createProcess (proc (joinPath ["solidity-windows", "solc.exe"]) ["--bin", path])
-            { std_out = CreatePipe
-            , std_err = NoStream }
-    exitCode <- waitForProcess hndl
-    -- print hout
-    contents <- B.hGetContents hout
-    let textContent = decodeUtf8 contents
-        hexCode =if length (T.lines textContent) < 4 then error (show contents) else T.filter (/= '\r') ((T.lines textContent) !! 3)
-    pure $ T.filter (/= '\r') hexCode
+compileSolidityFileBinFull path = compileSolidityFile Bin path
 
-compileSolidityFile :: CompileType -> FilePath -> IO B.ByteString
-compileSolidityFile compileType path = withSystemTempDirectory "solc-comp" $ \tempdir -> do
-    let compileArg = case compileType of
-            Bin -> "--bin"
-            BinRunTime -> "--bin-runtime"
-    (_, Just hout, _, hndl) <-
-        createProcess (proc (joinPath ["solidity-windows", "solc.exe"]) ["--bin-runtime", path])
-            { std_out = CreatePipe
-            , std_err = NoStream }
-    exitCode <- waitForProcess hndl
-    contents <- B.hGetContents hout
+compileSolidityFile :: CompileType -> FilePath -> IO T.Text
+compileSolidityFile compileType path = do
+    let (compileArg, ext) = case compileType of
+            Bin -> ("--bin", ".binbuild")
+            BinRunTime -> ("--bin-runtime", ".binrun")
+    -- check if the compiled version exists first
+    let compiledPath = replaceExtension path ext
+    exists <- doesFileExist compiledPath
+
+    print $ "finding " ++ compiledPath
+    contents <- if exists
+        then do
+            print $ "exists " ++ compiledPath
+            B.readFile compiledPath
+        else do
+            (_, Just hout, _, hndl) <-
+                createProcess (proc (joinPath ["solidity-windows", "solc.exe"]) [compileArg, path])
+                    { std_out = CreatePipe
+                    , std_err = Inherit }
+            exitCode <- waitForProcess hndl
+            -- print hout
+            contents <- B.hGetContents hout
+            print $ "Writing to " ++ compiledPath
+            B.writeFile compiledPath contents
+            -- error $ "ehhh"
+            -- contentsErr <- B.hGetContents herr
+            pure contents
     let textContent = decodeUtf8 contents
-        hexCode =if length (T.lines textContent) < 4 then error (show contents) else T.filter (/= '\r') ((T.lines textContent) !! 3)
-        (bsEncoded,rem) = B16.decode  $ encodeUtf8 hexCode
-    if rem == B.empty then pure bsEncoded else error "decoding failed"
+        hexCode = if length (T.lines textContent) < 4 then error (show contents) else T.filter (/= '\r') ((T.lines textContent) !! 3)
+    pure $ T.filter (/= '\r') hexCode
 
 
 mangleFilename :: FilePath -> String
