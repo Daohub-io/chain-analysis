@@ -33,7 +33,7 @@ jobs:
       - run:
           name: Build
           command: |
-            stack build --test --no-terminal
+            stack build --no-terminal
       - run:
           name: Test
           command: |
