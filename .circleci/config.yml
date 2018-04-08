@@ -23,7 +23,7 @@ jobs:
             sudo apt-get -y install gcc
             sudo apt-get -y install libgmp3-dev
             stack setup --no-terminal
-            sudo curl -sL https://deb.nodesource.com/setup_9.x | bash -
+            sudo curl -sL https://deb.nodesource.com/setup_9.x | sudo bash -
             sudo apt-get -y install nodejs
             sudo apt-get -y install npm
             sudo npm install -g ganache-cli
