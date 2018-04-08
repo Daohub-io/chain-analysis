@@ -15,6 +15,7 @@
 module Process where
 
 import Data.ByteString (empty, pack)
+import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode)
 import qualified Data.Map as Map
 import OpCode.Type
@@ -22,13 +23,16 @@ import OpCode.Utils
 
 import Numeric.Natural
 
+import Debug.Trace
+
 defaultCaps = Capabilities
     { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
     }
 
 transform :: [OpCode] -> [OpCode]
-transform opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes opCodes
+transform opCodes = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes opCodes
 
+midTransform opCodes = (\(a,b,c)->(a,b,countVarOpCodes c)) $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes opCodes
 type CountedOpCode = (OpCode, Maybe Integer)
 
 -- |Check if a list of counted @OpCode@s is strictly monotonically increasing.
@@ -60,6 +64,7 @@ countVarOpCodesAcc (counted, i) (x:xs) = countVarOpCodesAcc ((x, i) : counted, n
         nextValue = case x of
             Counted (x,_) -> i + (nBytes x)
             PushVar JumpTableDest256 -> i + 1 + 32
+            PushVar JDispatch256 -> i + 1 + 32
 countVarOpCodesAcc (counted, i) [] = reverse counted
 
 jumpDestinations :: [CountedOpCode] -> [Integer]
@@ -103,10 +108,34 @@ insertProtections caps codes = codes >>= (\ccode -> case ccode of
 data VarOpCode = Counted CountedOpCode | PushVar PushVarVal deriving (Eq, Show)
 data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 
+-- |TODO: this is a temporary proof of concept and is hardcoded to Solidity.
+replaceCodeCopy :: [OpCode] -> [OpCode]
+replaceCodeCopy code = replaceCodeCopy' lastByte [] code
+    where
+        lastByte = sum $ map nBytes code
+
+replaceCodeCopy' lastByte acc (REVERT:JUMPDEST:(PUSH2 lengthbs):DUP1:(PUSH2 startbs):(PUSH1 memstartbs1):CODECOPY:(PUSH1 memstartbs2):RETURN:cs)
+    = replaceCodeCopy' lastByte (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc) cs
+    where
+        length = (fromIntegral lastByte) - (fromIntegral $ evm256ToInteger startbs)
+        start = startbs
+
+replaceCodeCopy' lastByte acc (REVERT:JUMPDEST:(PUSH1 lengthbs):DUP1:(PUSH2 startbs):(PUSH1 memstartbs1):CODECOPY:(PUSH1 memstartbs2):RETURN:cs)
+    = replaceCodeCopy' lastByte (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc) cs
+    where
+        length = (fromIntegral (lastByte)) - (fromIntegral $ evm256ToInteger startbs)
+        start = integerToEVM256 ((evm256ToInteger startbs) + 1)
+
+replaceCodeCopy' lastByte acc (c:cs) = replaceCodeCopy' lastByte (c:acc) cs
+replaceCodeCopy' _ acc [] = reverse acc
+
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
     j@(JUMP, Just _) -> [ PushVar JumpTableDest256, Counted j]
-    j@(JUMPI, Just _) -> [ Counted (SWAP1, Nothing), PushVar JumpTableDest256, Counted j]
+    -- we don't want to do this to the first jump, so if it is in position 10,
+    -- do nothing.
+    j@(JUMPI, Just 10) -> [ Counted j]
+    j@(JUMPI, Just _) -> [ Counted (SWAP1, Nothing), PushVar JumpTableDest256, Counted j, Counted (POP, Nothing)]
     _ -> [Counted ccode])
     )
 
@@ -114,9 +143,21 @@ replaceJumps codes = (codes >>= (\ccode -> case ccode of
 appendJumpTable :: [VarOpCode] -> (Integer, Integer,  [VarOpCode])
 appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
     where
-        table = jumpTable (jumpDests codes)
-        jumpTableDest = (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
+        -- adjust table location based on CODECOPY arguments
+        codeOffset = case findCodeOffset codes of
+            Just x -> -1*(fromIntegral x)
+            Nothing -> 0
+        -- codeOffset = -0x1d
+        table = jumpTable (jumpDests codeOffset codes)
+        jumpTableDest = (\x->x+codeOffset) $ (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
+        -- jumpDispatchDest does not need the code offest as it's already
+        -- considered in jumpTableDest.
         jumpDispatchDest = jumpTableDest + (fromIntegral $ sum $ map nBytesVar table) - 4
+
+findCodeOffset :: [VarOpCode] -> Maybe Natural
+findCodeOffset ((Counted ((PUSH2 startbs), _)):(Counted (PUSH1 memstartbs1, _)):(Counted (CODECOPY,_)):cs) = Just $ evm256ToInteger startbs
+findCodeOffset (c:cs) = findCodeOffset cs
+findCodeOffset [] = Nothing
 
 -- -- |Returns a tuple of the jump destination of the jump table and the code.
 -- appendJumpTableAsm :: [VarOpCode] -> [AsmOpCode]
@@ -152,6 +193,7 @@ jumpTable jumpDests
             , Counted (SWAP1, Nothing)
             , PushVar JDispatch256
             , Counted (JUMPI, Nothing)
+            , Counted (POP, Nothing)
             ]
         jumpDispatch =
             [ Counted (JUMPDEST, Nothing)
@@ -163,14 +205,17 @@ jumpTable jumpDests
 -- |Find a mapping from all jump destinations to their new destinations. First,
 -- recount the byte locations to determine the new indices, then fold these into
 -- a map.
-jumpDests :: [VarOpCode] -> Map.Map Integer Integer
-jumpDests codes = foldl f Map.empty reCounted
+jumpDests :: Integer -> [VarOpCode] -> Map.Map Integer Integer
+jumpDests codeOffset codes = foldl f Map.empty reCounted
     where
         -- Recount to determine the new positions of codes
         reCounted = countVarOpCodes codes
         -- If we find a jump dest, add (k,v) (oldLocation, newLocation) to the
         -- map
-        f m (Counted (JUMPDEST, (Just n)), i) = Map.insert n i m
+        f m (Counted (JUMPDEST, (Just n)), i) = -- Map.insert n i m
+            if n < (-1)*(codeOffset) || i < (-1)*(codeOffset)
+                then m
+                else Map.insert (n+codeOffset) (i+codeOffset) m
         -- Otherwise do nothing.
         f m _ = m
 
