@@ -35,21 +35,17 @@ compileSolidityFile compileType path = do
     -- check if the compiled version exists first
     let compiledPath = replaceExtension path ext
     exists <- doesFileExist compiledPath
-
-    print $ "finding " ++ compiledPath
     contents <- if exists
         then do
-            print $ "exists " ++ compiledPath
             B.readFile compiledPath
         else do
             (_, Just hout, _, hndl) <-
                 createProcess (proc (joinPath ["solidity-windows", "solc.exe"]) [compileArg, path])
                     { std_out = CreatePipe
-                    , std_err = Inherit }
+                    , std_err = NoStream }
             exitCode <- waitForProcess hndl
             -- print hout
             contents <- B.hGetContents hout
-            print $ "Writing to " ++ compiledPath
             B.writeFile compiledPath contents
             -- error $ "ehhh"
             -- contentsErr <- B.hGetContents herr
