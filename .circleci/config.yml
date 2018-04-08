@@ -13,10 +13,10 @@ jobs:
             mkdir /tmp/stack/
             tar -xvzf /tmp/stack.tar.gz -C /tmp/stack/
             sudo mv /tmp/stack/stack-1.6.3-linux-x86_64/stack /usr/bin/stack
-      # - restore_cache:
-      #     keys:
-      #       - deps3-{{ .Branch }}-{{ .Revision }}
-      #       - deps3-{{ .Branch }}-
+      - restore_cache:
+          keys:
+            - deps3-{{ .Branch }}-{{ .Revision }}
+            - deps3-{{ .Branch }}-
       - run:
           name: Setup
           command: |
@@ -25,7 +25,6 @@ jobs:
             stack setup --no-terminal
             curl -sL https://deb.nodesource.com/setup_9.x | sudo bash -
             sudo apt-get -y install nodejs
-            # sudo apt-get -y install npm
             sudo npm install -g ganache-cli
       - run:
           name: Start local Ethereum network
@@ -34,7 +33,7 @@ jobs:
       - run:
           name: Build
           command: |
-            stack build --no-terminal
+            stack build --test -no-terminal
       - run:
           name: Test
           command: |
