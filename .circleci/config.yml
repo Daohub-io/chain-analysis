@@ -25,7 +25,7 @@ jobs:
             stack setup --no-terminal
             curl -sL https://deb.nodesource.com/setup_9.x | sudo bash -
             sudo apt-get -y install nodejs
-            sudo apt-get -y install npm
+            # sudo apt-get -y install npm
             sudo npm install -g ganache-cli
       - run:
           name: Start local Ethereum network
