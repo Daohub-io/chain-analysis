@@ -13,17 +13,17 @@ jobs:
             mkdir /tmp/stack/
             tar -xvzf /tmp/stack.tar.gz -C /tmp/stack/
             sudo mv /tmp/stack/stack-1.6.3-linux-x86_64/stack /usr/bin/stack
-      - restore_cache:
-          keys:
-            - deps3-{{ .Branch }}-{{ .Revision }}
-            - deps3-{{ .Branch }}-
+      # - restore_cache:
+      #     keys:
+      #       - deps3-{{ .Branch }}-{{ .Revision }}
+      #       - deps3-{{ .Branch }}-
       - run:
           name: Setup
           command: |
             sudo apt-get -y install gcc
             sudo apt-get -y install libgmp3-dev
             stack setup --no-terminal
-            sudo curl -sL https://deb.nodesource.com/setup_9.x | sudo bash -
+            curl -sL https://deb.nodesource.com/setup_9.x | sudo bash -
             sudo apt-get -y install nodejs
             sudo apt-get -y install npm
             sudo npm install -g ganache-cli
