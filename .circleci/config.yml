@@ -23,6 +23,13 @@ jobs:
             sudo apt-get -y install gcc
             sudo apt-get -y install libgmp3-dev
             stack setup --no-terminal
+            sudo apt-get -y install node
+            sudo apt-get -y install npm
+            npm install -g ganache-cli
+      - run:
+          name: Start local Ethereum network
+          command: ganache-cli
+          background: true
       - run:
           name: Build
           command: |
