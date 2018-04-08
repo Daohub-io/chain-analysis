@@ -33,13 +33,14 @@ jobs:
       - run:
           name: Build
           command: |
-            stack build --no-terminal
-      - run:
-          name: Test
-          command: |
-            stack test --no-terminal
+            stack build --no-terminal --test --no-run-tests
       - save_cache:
           key: deps3-{{ .Branch }}-
           paths:
             - "~/.stack"
             - ".stack-work"
+      - run:
+          name: Test
+          command: |
+            stack test --no-terminal
+
