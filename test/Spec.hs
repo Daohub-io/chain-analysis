@@ -548,6 +548,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             assertEqual "Result" "0x0000000000000000000000000000000000000000000000000000000000000046" res
         , storeAndGetOnChainUnprotected
         , storeAndGetOnChainProtected
+        , storeAndGetOnChainProtectedOutOfBounds
         , TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
@@ -746,28 +747,12 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
                 then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
                 else pure ()
     writeFile "tbuildTransformedPre.txt" $ unlines $ map show $ countCodes $ bytecode
-<<<<<<< Updated upstream
-    writeFile "tbuildTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform bytecode
-    writeFile "tbuildTransformed.txt" $ unlines $ map show $ countCodes $ transform bytecode
-    -- mapM_ print (countCodes bytecode)
-=======
     writeFile "tbuildTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform defaultCaps  bytecode
     writeFile "tbuildTransformed.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
->>>>>>> Stashed changes
     writeFile "t.txt" $ unlines $ map show $ countCodes bytecode
     writeFile "ttrans.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
 
-<<<<<<< Updated upstream
-    -- if not $ null $ checkStaticJumps bytecode
-    --     then assertFailure $ "Static jumps not ok before transform " ++ show (checkStaticJumps bytecode)
-    --     else pure ()
-    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform bytecode
-    -- if not $ null $ checkStaticJumps bytecode
-    --     then assertFailure $ "Static jumps not ok after transform " ++ show (checkStaticJumps $ transform bytecode)
-    --     else pure ()
-=======
     let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform defaultCaps bytecode
->>>>>>> Stashed changes
     (Right availableAccounts) <- runWeb3 accounts
     let sender = availableAccounts !! 1
     deployRes <- Control.Exception.try $ deployContract sender bsEncoded :: IO (Either SomeException (Text, Text))
@@ -809,6 +794,86 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
         Right storeRes -> assertBool "Store Result" ("0x0" /= storeRes)
         Left e -> error $ "ssssseee" ++ show e
     --  Use a call to "get" to ensure that the stored value has been correctly set.
+    getResRaw <- runWeb3 $ do
+        let details = (Call {
+                callFrom = Just sender,
+                callTo = Just newContractAddress,
+                callGas = Nothing,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just ((JsonAbi.methodId (DFunction "get" True
+                    [] (Just [FunctionArg "d" "uint256"]))))
+            })
+        theCall <- Eth.call details Latest -- TODO: switch back to using this for the result
+        -- theCall <- Eth.sendTransaction details
+        pure (theCall)
+    getRes <- case getResRaw of
+        Left e -> assertFailure $  ":LK " ++ show e
+        Right x -> pure x
+    assertEqual "Result" ("0x" <> testValue) getRes
+
+storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain (protected, out of bounds)" $ TestCase $ do
+    -- Read in the test Solidity source file. This file contains a
+    -- Solidity contract with a single unprotected SSTORE call.
+    let caps = Capabilities
+            { caps_storageRange  = (0x0200000000000000000000000000000000000000000000000000000000000000,0x0300000000000000000000000000000000000000000000000000000000000000)
+            }
+    bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
+    bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
+    let
+        bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
+            in if remainder == B.empty then bytes else error (show remainder)
+        bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
+            in if remainder == B.empty then bytes else error (show remainder)
+    bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
+    bytecodeRuntimeRes <- Control.Exception.try $ parseGoodExample bsDecodedRunTime :: IO (Either SomeException [OpCode])
+    case bytecodeRuntimeRes of
+        Left e -> error $ "abc" ++ show e
+        Right bytecodeRuntime -> do
+            if not $ null $ checkStaticJumps bytecodeRuntime
+                then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
+                else pure ()
+
+    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform caps bytecode
+    (Right availableAccounts) <- runWeb3 accounts
+    let sender = availableAccounts !! 1
+    deployRes <- Control.Exception.try $ deployContract sender bsEncoded :: IO (Either SomeException (Text, Text))
+    let (res, tx) = case deployRes of
+            Right x -> x
+            Left e -> error ("123" ++ show e)
+    newContractAddress <- getContractAddress tx
+    -- contract needs to be a proper address
+    codeRaw <- runWeb3 $ getCode newContractAddress Latest
+    let code = case codeRaw of
+            Left e -> error $ "sdasdas" ++  show e
+            Right x -> x
+
+    r <- Control.Exception.try $ parseGoodExample $ fst $ B16.decode {- $ B.drop ((17+3+9+5)*2) -} $ B.drop 2 $ encodeUtf8 code :: IO (Either SomeException [OpCode])
+    let actualRunCode = case r of
+            Right x -> x
+            Left e -> error ("rrrt" ++ show e)
+    -- Because the store transaction should not have succeeded, this should still be zero.
+    let testValue = "0000000000000000000000000000000000000000000000000000000000000000"
+    -- Use a call (send a transaction) to "store" to set a particular value
+    storeResRaw <- runWeb3 $ do
+        let details = (Call {
+                callFrom = Just sender,
+                callTo = Just newContractAddress,
+                callGas = Nothing,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just ((JsonAbi.methodId (DFunction "store" False
+                    [ FunctionArg "loo" "uint256"
+                    ] Nothing)) <> testValue)
+            })
+        theCall <- Eth.call details Latest
+        theEffect <- Eth.sendTransaction details
+        pure (theCall, theEffect)
+    -- The transaction should fail
+    case storeResRaw of
+        Right (theCall, theEffect) -> assertFailure "Should not succeed"
+        Left e -> pure ()
+    -- Use a call to "get" to ensure that the stored value has been correctly set.
     getResRaw <- runWeb3 $ do
         let details = (Call {
                 callFrom = Just sender,
