@@ -29,10 +29,10 @@ defaultCaps = Capabilities
     { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
     }
 
-transform :: [OpCode] -> [OpCode]
-transform opCodes = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes opCodes
+transform :: Capabilities -> [OpCode] -> [OpCode]
+transform caps opCodes = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections caps $ countCodes opCodes
 
-midTransform opCodes = (\(a,b,c)->(a,b,countVarOpCodes c)) $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes opCodes
+midTransform caps opCodes = (\(a,b,c)->(a,b,countVarOpCodes c)) $ appendJumpTable $ replaceJumps $ insertProtections caps $ countCodes opCodes
 type CountedOpCode = (OpCode, Maybe Integer)
 
 -- |Check if a list of counted @OpCode@s is strictly monotonically increasing.
@@ -76,7 +76,7 @@ jumpDestinations codes = foldl func [] codes where
 -- presumes that result doesn't contain JUMP and JUMPDEST opcodes
 -- |See specification docs in the BeakerOS repository (https://github.com/DaoLab/beakeros/docs/0.1v/store-protect.md).
 protectCall
-    :: Capabilities-- ^Highest permissable address
+    :: Capabilities-- ^Permissable address ranges
     -> OpCode -- ^The opcode being protected
     -> [OpCode]
 protectCall caps SSTORE =

@@ -361,7 +361,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
     [ TestLabel "Storage Protection" $ TestList $
         [ TestLabel "Should Leave Code w/o Jumps or JumpDests Unchanged" $ TestCase $ do
             let code = [STOP, STOP, STOP]
-            assertEqual "Code should remain unchanged" code (transform code)
+            assertEqual "Code should remain unchanged" code (transform defaultCaps code)
         , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
             let code =
                     [ PUSH1 (pack [0x4])
@@ -415,7 +415,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , POP
                     , JUMP
                     ]
-            assertEqual "Table should be added" expected (transform code)
+            assertEqual "Table should be added" expected (transform defaultCaps code)
         -- , TestLabel "Should insert additional opcodes to code with SSTORE (no jump)" $ TestCase $ do
         --     let code =
         --             [ PUSH1 (pack [0x4])
@@ -436,7 +436,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         --             , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
         --             , SSTORE -- perform the store
         --             ]
-        --         transformed = transform code
+        --         transformed = transform defaultCaps code
         --     assertEqual "The inserted code should be as expected" expected transformed
         -- , TestLabel "Should insert additional opcodes to code with SSTORE (plus a jump)" $ TestCase $ do
         --     let code =
@@ -485,7 +485,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         --             , POP
         --             , JUMP
         --             ]
-        --         transformed = transform code
+        --         transformed = transform defaultCaps code
         --     assertEqual "The inserted code should be as expected" (countCodes expected) (countCodes transformed)
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
@@ -500,7 +500,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             code <- parseGoodExample bsDecodedFull
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
             -- after transformation it should pass store checker
-            assertBool "After transformation should pass store checker" (checkStores $ transform code)
+            assertBool "After transformation should pass store checker" (checkStores $ transform defaultCaps code)
         , TestLabel "\"StorerWithAdd\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
@@ -514,7 +514,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             code <- parseGoodExample bsDecodedFull
             assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
             -- after transformation it should pass store checker
-            assertBool "After transformation should pass store checker" (checkStores $ transform code)
+            assertBool "After transformation should pass store checker" (checkStores $ transform defaultCaps code)
         , TestLabel "\"StorerWithAdd\" on chain" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
@@ -686,7 +686,7 @@ adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase 
         bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
             in if remainder == B.empty then bytes else error (show remainder)
     bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
-    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform bytecode
+    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform defaultCaps bytecode
     (Right availableAccounts) <- runWeb3 accounts
     let sender = availableAccounts !! 1
     (res, tx) <- deployContract sender bsEncoded
@@ -698,8 +698,8 @@ adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase 
             Right x -> x
             Left e -> error ("rqqrrt" ++ show e)
     writeFile "tbuildAdderTransformedPre.txt" $ unlines $ map show $ countCodes $ bytecode
-    writeFile "tbuildAdderTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform bytecode
-    writeFile "tbuildAdderTransformed.txt" $ unlines $ map show $ countCodes $ transform bytecode
+    writeFile "tbuildAdderTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform defaultCaps  bytecode
+    writeFile "tbuildAdderTransformed.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
     writeFile "trunAdderTransformed.txt" $ unlines $ map show $ countCodes $ actualRunCode
     -- writeFile "trunTransformedClear.txt" $ unlines $ map show $ actualRunCode
 
@@ -746,12 +746,18 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
                 then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
                 else pure ()
     writeFile "tbuildTransformedPre.txt" $ unlines $ map show $ countCodes $ bytecode
+<<<<<<< Updated upstream
     writeFile "tbuildTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform bytecode
     writeFile "tbuildTransformed.txt" $ unlines $ map show $ countCodes $ transform bytecode
     -- mapM_ print (countCodes bytecode)
+=======
+    writeFile "tbuildTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform defaultCaps  bytecode
+    writeFile "tbuildTransformed.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
+>>>>>>> Stashed changes
     writeFile "t.txt" $ unlines $ map show $ countCodes bytecode
-    writeFile "ttrans.txt" $ unlines $ map show $ countCodes $ transform bytecode
+    writeFile "ttrans.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
 
+<<<<<<< Updated upstream
     -- if not $ null $ checkStaticJumps bytecode
     --     then assertFailure $ "Static jumps not ok before transform " ++ show (checkStaticJumps bytecode)
     --     else pure ()
@@ -759,6 +765,9 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
     -- if not $ null $ checkStaticJumps bytecode
     --     then assertFailure $ "Static jumps not ok after transform " ++ show (checkStaticJumps $ transform bytecode)
     --     else pure ()
+=======
+    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform defaultCaps bytecode
+>>>>>>> Stashed changes
     (Right availableAccounts) <- runWeb3 accounts
     let sender = availableAccounts !! 1
     deployRes <- Control.Exception.try $ deployContract sender bsEncoded :: IO (Either SomeException (Text, Text))
