@@ -619,6 +619,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
 
             (Right code) <- runWeb3 $ getCode newContractAddress Latest
             actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
+            pure ()
         ]
 
     -- , TestLabel "Append OpCodes" $ TestList $
