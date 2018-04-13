@@ -617,13 +617,8 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             (res, tx) <- deployContract sender bsEncoded
             newContractAddress <- getContractAddress tx
 
-            B.writeFile "TrivialBuildA.txt" $ B16.encode $ B.concat $ map toByteString bytecode
-            writeFile "TrivialBuild.txt"  $ unlines $ map show $ countCodes bytecode
-
             (Right code) <- runWeb3 $ getCode newContractAddress Latest
             actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
-            T.writeFile "TrivialRunA.txt" $ code
-            writeFile "TrivialRun.txt" $ unlines $ map show $ countCodes actualRunCode
         ]
 
     -- , TestLabel "Append OpCodes" $ TestList $
@@ -698,13 +693,7 @@ adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase 
     let actualRunCode = case r of
             Right x -> x
             Left e -> error ("rqqrrt" ++ show e)
-    writeFile "tbuildAdderTransformedPre.txt" $ unlines $ map show $ countCodes $ bytecode
-    writeFile "tbuildAdderTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform defaultCaps  bytecode
-    writeFile "tbuildAdderTransformed.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
-    writeFile "trunAdderTransformed.txt" $ unlines $ map show $ countCodes $ actualRunCode
-    -- writeFile "trunTransformedClear.txt" $ unlines $ map show $ actualRunCode
 
-    -- assertEqual "Deployed bytecode is as expected" ("0x" <> bsEncodedRunTime) code
     let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
         testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
         testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
@@ -742,15 +731,9 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
     case bytecodeRuntimeRes of
         Left e -> error $ "abc" ++ show e
         Right bytecodeRuntime -> do
-            writeFile "trun.txt" $ unlines $ map show $ countCodes bytecodeRuntime
             if not $ null $ checkStaticJumps bytecodeRuntime
                 then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
                 else pure ()
-    writeFile "tbuildTransformedPre.txt" $ unlines $ map show $ countCodes $ bytecode
-    writeFile "tbuildTransformedMid.txt" $ unlines $ map show $ (\(_,_,c)->c) $ midTransform defaultCaps  bytecode
-    writeFile "tbuildTransformed.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
-    writeFile "t.txt" $ unlines $ map show $ countCodes bytecode
-    writeFile "ttrans.txt" $ unlines $ map show $ countCodes $ transform defaultCaps bytecode
 
     let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform defaultCaps bytecode
     (Right availableAccounts) <- runWeb3 accounts
@@ -770,10 +753,6 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
     let actualRunCode = case r of
             Right x -> x
             Left e -> error ("rrrt" ++ show e)
-    writeFile "trunTransformed.txt" $ unlines $ map show $ countCodes $ actualRunCode
-    writeFile "trunTransformedClear.txt" $ unlines $ map show $ actualRunCode
-
-    -- testJumps actualRunCode
 
     let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
     -- Use a call (send a transaction) to "store" to set a particular value
@@ -896,7 +875,6 @@ storeAndGetOnChainUnprotected  = TestLabel "\"StorerAndGetter\" on chain (unprot
     -- Read in the test Solidity source file. This file contains a
     -- Solidity contract with a single unprotected SSTORE call.
     bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
-    bsEncodedFull2 <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
     bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
     let
         bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
@@ -910,12 +888,9 @@ storeAndGetOnChainUnprotected  = TestLabel "\"StorerAndGetter\" on chain (unprot
     newContractAddress <- getContractAddress tx
 
     buildCode <- parseGoodExample bsDecodedFull
-    writeFile "tbuildUntransformed.txt"  $ unlines $ map show $ countCodes buildCode
 
     (Right code) <- runWeb3 $ getCode newContractAddress Latest
     actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
-    writeFile "trunUntransformed.txt" $ unlines $ map show $ countCodes actualRunCode
-    writeFile "trunUntransformedClear.txt" $ unlines $ map show $ actualRunCode
 
     -- testJumps code
     testJumps actualRunCode
