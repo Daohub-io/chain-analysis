@@ -19,7 +19,10 @@ contract StorerProtectedInline {
                 or // set top of stack to 1 if either is true
                 pc // push the program counter to the stack, this is guaranteed to be an invalid jump destination
                 jumpi // jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+                swap1 // put the value on top with the key underneath
+                dup2 // put a copy of the key on top
                 sstore // perform the store
+                pop
         }
     }
 }

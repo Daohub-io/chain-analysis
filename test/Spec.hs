@@ -79,7 +79,7 @@ mainWithOpts = do
 
     defaultMainWithOpts tests my_runner_opts
 
-tests = -- [ testGroup "Adder Protected On Chain" $ hUnitTestToTests adderProtectedOnChain ]
+tests = -- [ testGroup "Single Test" $ hUnitTestToTests storeAndGetOnChainProtected ]
     [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
     , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
     , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
@@ -330,13 +330,15 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
                     , OR -- set top of stack to 1 if either is true
                     , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
                     , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+                    , SWAP1 -- put the value on top with the key underneath
+                    , DUP2 -- put a copy of the key on top
                     , SSTORE -- perform the store
                     ]
             assertBool "Protected stored calls should pass store checker" (checkStores code)
             assertEqual "Protected store a calls should match the required capabilities"
                 (Ranges $ S.fromList [(lowerLimit, upperLimit)])
                 (getRequiredCapabilities code)
-        , TestLabel "\"StoreProtetectedInline\"" $ TestCase $ do
+        , TestLabel "\"StoreProtectedInline\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single SSTORE call, with all of the
             -- necessary protection code entered in Solidity assembly.
@@ -754,6 +756,8 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
     let actualRunCode = case r of
             Right x -> x
             Left e -> error ("rrrt" ++ show e)
+    writeFile "initCode.txt" $ unlines $ map show $ transform defaultCaps bytecode
+    writeFile "runCode.txt" $ unlines $ map show actualRunCode
 
     let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
     -- Use a call (send a transaction) to "store" to set a particular value
