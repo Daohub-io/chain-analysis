@@ -757,8 +757,8 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
     let actualRunCode = case r of
             Right x -> x
             Left e -> error ("rrrt" ++ show e)
-    writeFile "initCode.txt" $ unlines $ map show $ transform defaultCaps bytecode
-    writeFile "runCode.txt" $ unlines $ map show actualRunCode
+    -- writeFile "initCode.txt" $ unlines $ map show $ transform defaultCaps bytecode
+    -- writeFile "runCode.txt" $ unlines $ map show actualRunCode
 
     let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
     -- Use a call (send a transaction) to "store" to set a particular value
