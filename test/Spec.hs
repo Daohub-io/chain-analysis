@@ -14,6 +14,7 @@ import Data.Maybe
 import Data.Monoid (mempty, (<>))
 import qualified Data.Set as S
 import Data.Text.Encoding
+import Data.Either
 
 import Numeric.Natural
 
@@ -38,9 +39,9 @@ import Models.HandWritten
 import Network.Ethereum.Web3
 import Network.Ethereum.Web3.Web3
 import Network.Ethereum.Web3.JsonAbi as JsonAbi
--- import Network.Ethereum.Web3.TH
 import Network.Ethereum.Web3.Types
 import Network.Ethereum.Web3.Eth as Eth
+import qualified Network.Ethereum.Web3.Address as Address
 
 import Data.List
 import Data.Text (Text)
@@ -795,6 +796,26 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
         Left e -> assertFailure $  ":LK " ++ show e
         Right x -> pure x
     assertEqual "Result" ("0x" <> testValue) getRes
+    getLogsRaw <- runWeb3 $ do
+        let details = (Filter
+                { filterAddress = Just newContractAddress
+                , filterTopics    = Just []
+                , filterFromBlock = Earliest
+                , filterToBlock = Latest
+                })
+        theLogs <- Eth.getLogs details
+        pure (theLogs)
+    case getLogsRaw of
+        Left e -> assertFailure $  "logs " ++ show e
+        Right logs -> do
+            -- There will only be one log here because this is a new contract.
+            assertEqual "There are the correct number of logs" 1 (length logs)
+            let [log] = logs
+            assertEqual "Log address is correct" newContractAddress (changeAddress log)
+            case (Address.fromText $ T.take 40 $ T.drop 2 $ changeData log) of
+                Left e -> assertFailure (show e)
+                Right address -> assertEqual "Log data address is correct" newContractAddress address
+            assertEqual "Log data storage key is correct" "0100000100000000000000000000000000000000000000000000000000000000" (T.drop 40 $ T.drop 2 $ changeData log)
 
 storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain (protected, out of bounds)" $ TestCase $ do
     -- Read in the test Solidity source file. This file contains a
@@ -875,6 +896,7 @@ storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain
         Left e -> assertFailure $  ":LK " ++ show e
         Right x -> pure x
     assertEqual "Result" ("0x" <> testValue) getRes
+    -- check the presence of the logs
 
 storeAndGetOnChainUnprotected  = TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestCase $ do
     -- Read in the test Solidity source file. This file contains a
