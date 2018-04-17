@@ -224,25 +224,10 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
         , TestLabel "\"StorerWithAdd\" on chain" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
-            bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerWithAdd.sol"
-            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerWithAdd.sol"
-            let
-                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
-                    in if remainder == B.empty then bytes else error (show remainder)
-                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
-                    in if remainder == B.empty then bytes else error (show remainder)
-            let bsEncoded = B16.encode bsDecodedFull
-            availableAccounts <- do
-                r <- runWeb3 accounts
-                case r of
-                    Right x -> pure x
-                    Left e -> error $ show e
-
-            let sender = availableAccounts !! 1
-            (res, tx) <- deployContract sender bsEncoded
-            newContractAddress <- getContractAddress tx
+            newContractAddress <- deployFromFile id "test/Models/StorerWithAdd.sol"
             (Right (res)) <- runWeb3 $ do
-                let details = (Call {
+                sender <- fmap (!! 1) accounts
+                let details = Call {
                         callFrom = Just sender,
                         callTo = Just newContractAddress,
                         callGas = Nothing,
@@ -252,52 +237,16 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                             [ FunctionArg "a" "uint256"
                             , FunctionArg "b" "uint256"
                             ] (Just [FunctionArg "" "uint256"]))) <> "0000000000000000000000000000000000000000000000000000000000000045" <> "0000000000000000000000000000000000000000000000000000000000000001")
-                    })
+                    }
 
                 theCall <- Eth.call details Latest
                 pure (theCall)
             assertEqual "Result" "0x0000000000000000000000000000000000000000000000000000000000000046" res
+        , adderProtectedOnChain
         , storeAndGetOnChainUnprotected
         , storeAndGetOnChainProtected
         , storeAndGetOnChainProtectedOutOfBounds
-        , TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
-            -- Read in the test Solidity source file. This file contains a
-            -- Solidity contract with a single unprotected SSTORE call.
-            bsEncodedFull <- compileSolidityFileBinFull "test/Models/Adder.sol"
-            bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/Adder.sol"
-            let
-                bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
-                    in if remainder == B.empty then bytes else error (show remainder)
-                bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
-                    in if remainder == B.empty then bytes else error (show remainder)
-            bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
-            let bsEncoded = B16.encode $ B.concat $ map toByteString $ bytecode
-            (Right availableAccounts) <- runWeb3 accounts
-            let sender = availableAccounts !! 1
-            (res, tx) <- deployContract sender bsEncoded
-            newContractAddress <- getContractAddress tx
-            (Right code) <- runWeb3 $ getCode newContractAddress Latest
-            -- assertEqual "Deployed bytecode is as expected" ("0x" <> (T.pack $ C8.unpack bsEncoded)) code
-            let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
-                testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
-                testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
-            resRaw <- runWeb3 $ do
-                let details = (Call {
-                        callFrom = Just sender,
-                        callTo = Just newContractAddress,
-                        callGas = Nothing,
-                        callGasPrice = Nothing,
-                        callValue = Nothing,
-                        callData = Just ((JsonAbi.methodId (DFunction "add" False
-                            [ FunctionArg "a" "uint256"
-                            , FunctionArg "b" "uint256"
-                            ] (Just [FunctionArg "" "uint256"]))) <> testValueA <> testValueB)
-                    })
-                theCall <- Eth.call details Latest
-                pure (theCall)
-            case resRaw of
-                Left e -> assertFailure $ show e
-                Right res -> assertEqual "Result" ("0x" <> testValueRes) res
+        , adderOnChainUntransformed
         , TestLabel "Trivial on chain" $ TestCase $ do
             let bytecode =
                     [ PUSH1 (pack [0x10])
@@ -383,34 +332,18 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
 
 
 adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase $ do
-    -- Read in the test Solidity source file. This file contains a
-    -- Solidity contract with a single unprotected SSTORE call.
-    -- bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
-    bsEncodedFull <- compileSolidityFileBinFull "test/Models/Adder.sol"
-    bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/Adder.sol"
-    let
-        bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
-            in if remainder == B.empty then bytes else error (show remainder)
-        bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
-            in if remainder == B.empty then bytes else error (show remainder)
-    bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
-    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform defaultCaps bytecode
-    (Right availableAccounts) <- runWeb3 accounts
-    let sender = availableAccounts !! 1
-    (res, tx) <- deployContract sender bsEncoded
-    newContractAddress <- getContractAddress tx
-    (Right code) <- runWeb3 $ getCode newContractAddress Latest
-
-    r <- Control.Exception.try $ parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code :: IO (Either SomeException [OpCode])
-    let actualRunCode = case r of
-            Right x -> x
-            Left e -> error ("rqqrrt" ++ show e)
-
+    -- Define test values.
     let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
         testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
         testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
+
+    -- Read in the test Solidity source file. This file contains a
+    -- Solidity contract with a single unprotected SSTORE call.
+    newContractAddress <- deployFromFile (transform defaultCaps) "test/Models/Adder.sol"
+
     resRaw <- runWeb3 $ do
-        let details = (Call {
+        sender <- fmap (!! 1) accounts
+        let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,
                 callGas = Nothing,
@@ -420,7 +353,7 @@ adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase 
                     [ FunctionArg "a" "uint256"
                     , FunctionArg "b" "uint256"
                     ] (Just [FunctionArg "" "uint256"]))) <> testValueA <> testValueB)
-            })
+            }
         theCall <- Eth.call details Latest
         -- theCall <- Eth.sendTransaction details
         pure (theCall)
@@ -428,50 +361,50 @@ adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase 
         Left e -> assertFailure $ show e
         Right res -> assertEqual "Result" ("0x" <> testValueRes) res
 
-storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestCase $ do
+
+adderOnChainUntransformed = TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
     -- Read in the test Solidity source file. This file contains a
     -- Solidity contract with a single unprotected SSTORE call.
-    bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
-    bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
-    let
-        bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
-            in if remainder == B.empty then bytes else error (show remainder)
-        bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
-            in if remainder == B.empty then bytes else error (show remainder)
-    bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
-    bytecodeRuntimeRes <- Control.Exception.try $ parseGoodExample bsDecodedRunTime :: IO (Either SomeException [OpCode])
-    case bytecodeRuntimeRes of
-        Left e -> error $ "abc" ++ show e
-        Right bytecodeRuntime -> do
-            if not $ null $ checkStaticJumps bytecodeRuntime
-                then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
-                else pure ()
+    newContractAddress <- deployFromFile id "test/Models/Adder.sol"
+    -- testValueA + testValueB = testValueRes
+    let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
+        testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
+        testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
+    resRaw <- runWeb3 $ do
+        sender <- fmap (!! 1) accounts
+        let details = Call {
+                callFrom = Just sender,
+                callTo = Just newContractAddress,
+                callGas = Nothing,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just ((JsonAbi.methodId (DFunction "add" False
+                    [ FunctionArg "a" "uint256"
+                    , FunctionArg "b" "uint256"
+                    ] (Just [FunctionArg "" "uint256"]))) <> testValueA <> testValueB)
+            }
+        theCall <- Eth.call details Latest
+        pure (theCall)
+    case resRaw of
+        Left e -> assertFailure $ show e
+        Right res -> assertEqual "Result" ("0x" <> testValueRes) res
 
-    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform defaultCaps bytecode
-    (Right availableAccounts) <- runWeb3 accounts
-    let sender = availableAccounts !! 1
-    deployRes <- Control.Exception.try $ deployContract sender bsEncoded :: IO (Either SomeException (Text, Text))
-    let (res, tx) = case deployRes of
-            Right x -> x
-            Left e -> error ("123" ++ show e)
-    newContractAddress <- getContractAddress tx
 
-    codeRaw <- runWeb3 $ getCode newContractAddress Latest
-    let code = case codeRaw of
-            Left e -> error $ "sdasdas" ++  show e
-            Right x -> x
+storeAndGetOnChainUnprotected  = TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestCase $ do
+    -- Read in the test Solidity source file. This file contains a
+    -- Solidity contract with a single unprotected SSTORE call.
+    newContractAddress <- deployFromFile id "test/Models/StorerAndGetter.sol"
 
-    r <- Control.Exception.try $ parseGoodExample $ fst $ B16.decode {- $ B.drop ((17+3+9+5)*2) -} $ B.drop 2 $ encodeUtf8 code :: IO (Either SomeException [OpCode])
-    let actualRunCode = case r of
-            Right x -> x
-            Left e -> error ("rrrt" ++ show e)
-    -- writeFile "initCode.txt" $ unlines $ map show $ transform defaultCaps bytecode
-    -- writeFile "runCode.txt" $ unlines $ map show actualRunCode
+    -- We are able to run test jumps as this code is now in it's deployed form
+    (Right code) <- runWeb3 $ getCode newContractAddress Latest
+    actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
+    testJumps actualRunCode
 
     let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
     -- Use a call (send a transaction) to "store" to set a particular value
-    storeResRaw <- runWeb3 $ do
-        let details = (Call {
+    (Right (storeRes)) <- runWeb3 $ do
+        sender <- fmap (!! 1) accounts
+        let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,
                 callGas = Nothing,
@@ -480,15 +413,56 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
                 callData = Just ((JsonAbi.methodId (DFunction "store" False
                     [ FunctionArg "loo" "uint256"
                     ] Nothing)) <> testValue)
-            })
+            }
         theCall <- Eth.sendTransaction details
         pure (theCall)
+    assertBool "Store result should not be zero" ("0x0" /= storeRes)
+    --  Use a call to "get" to ensure that the stored value has been correctly set.
+    (Right (getRes)) <- runWeb3 $ do
+        sender <- fmap (!! 1) accounts
+        let details = Call {
+                callFrom = Just sender,
+                callTo = Just newContractAddress,
+                callGas = Nothing,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just ((JsonAbi.methodId (DFunction "get" False
+                    [] (Just [FunctionArg "d" "uint256"]))))
+            }
+        theCall <- Eth.call details Latest -- TODO: switch back to using this for the result
+        -- theCall <- Eth.sendTransaction details
+        pure (theCall)
+    assertEqual "Result should be successfully retrieved" ("0x" <> testValue) getRes
+
+storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestCase $ do
+    -- Read in the test Solidity source file. This file contains a
+    -- Solidity contract with a single unprotected SSTORE call.
+    newContractAddress <- deployFromFile (transform defaultCaps) "test/Models/StorerAndGetter.sol"
+
+    let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
+    -- Use a call (send a transaction) to "store" to set a particular value
+    storeResRaw <- runWeb3 $ do
+        sender <- fmap (!! 1) accounts
+        let details = Call {
+                callFrom = Just sender,
+                callTo = Just newContractAddress,
+                callGas = Nothing,
+                callGasPrice = Nothing,
+                callValue = Nothing,
+                callData = Just ((JsonAbi.methodId (DFunction "store" False
+                    [ FunctionArg "loo" "uint256"
+                    ] Nothing)) <> testValue)
+            }
+        theCall <- Eth.sendTransaction details
+        pure (theCall)
+
     case storeResRaw of
         Right storeRes -> assertBool "Store Result" ("0x0" /= storeRes)
         Left e -> error $ "ssssseee" ++ show e
     --  Use a call to "get" to ensure that the stored value has been correctly set.
     getResRaw <- runWeb3 $ do
-        let details = (Call {
+        sender <- fmap (!! 1) accounts
+        let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,
                 callGas = Nothing,
@@ -496,7 +470,7 @@ storeAndGetOnChainProtected = TestLabel "\"StorerAndGetter\" on chain (protected
                 callValue = Nothing,
                 callData = Just ((JsonAbi.methodId (DFunction "get" True
                     [] (Just [FunctionArg "d" "uint256"]))))
-            })
+            }
         theCall <- Eth.call details Latest -- TODO: switch back to using this for the result
         -- theCall <- Eth.sendTransaction details
         pure (theCall)
@@ -531,45 +505,13 @@ storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain
     let caps = Capabilities
             { caps_storageRange  = (0x0200000000000000000000000000000000000000000000000000000000000000,0x0300000000000000000000000000000000000000000000000000000000000000)
             }
-    bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
-    bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
-    let
-        bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
-            in if remainder == B.empty then bytes else error (show remainder)
-        bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
-            in if remainder == B.empty then bytes else error (show remainder)
-    bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
-    bytecodeRuntimeRes <- Control.Exception.try $ parseGoodExample bsDecodedRunTime :: IO (Either SomeException [OpCode])
-    case bytecodeRuntimeRes of
-        Left e -> error $ "abc" ++ show e
-        Right bytecodeRuntime -> do
-            if not $ null $ checkStaticJumps bytecodeRuntime
-                then assertFailure $ "Static jumps not ok before transform (runtime) " ++ show (checkStaticJumps bytecode)
-                else pure ()
-
-    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform caps bytecode
-    (Right availableAccounts) <- runWeb3 accounts
-    let sender = availableAccounts !! 1
-    deployRes <- Control.Exception.try $ deployContract sender bsEncoded :: IO (Either SomeException (Text, Text))
-    let (res, tx) = case deployRes of
-            Right x -> x
-            Left e -> error ("123" ++ show e)
-    newContractAddress <- getContractAddress tx
-    -- contract needs to be a proper address
-    codeRaw <- runWeb3 $ getCode newContractAddress Latest
-    let code = case codeRaw of
-            Left e -> error $ "sdasdas" ++  show e
-            Right x -> x
-
-    r <- Control.Exception.try $ parseGoodExample $ fst $ B16.decode {- $ B.drop ((17+3+9+5)*2) -} $ B.drop 2 $ encodeUtf8 code :: IO (Either SomeException [OpCode])
-    let actualRunCode = case r of
-            Right x -> x
-            Left e -> error ("rrrt" ++ show e)
+    newContractAddress <- deployFromFile (transform caps) "test/Models/StorerAndGetter.sol"
     -- Because the store transaction should not have succeeded, this should still be zero.
     let testValue = "0000000000000000000000000000000000000000000000000000000000000000"
     -- Use a call (send a transaction) to "store" to set a particular value
     storeResRaw <- runWeb3 $ do
-        let details = (Call {
+        sender <- fmap (!! 1) accounts
+        let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,
                 callGas = Nothing,
@@ -578,7 +520,7 @@ storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain
                 callData = Just ((JsonAbi.methodId (DFunction "store" False
                     [ FunctionArg "loo" "uint256"
                     ] Nothing)) <> testValue)
-            })
+            }
         theCall <- Eth.call details Latest
         theEffect <- Eth.sendTransaction details
         pure (theCall, theEffect)
@@ -588,7 +530,8 @@ storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain
         Left e -> pure ()
     -- Use a call to "get" to ensure that the stored value has been correctly set.
     getResRaw <- runWeb3 $ do
-        let details = (Call {
+        sender <- fmap (!! 1) accounts
+        let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,
                 callGas = Nothing,
@@ -596,7 +539,7 @@ storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain
                 callValue = Nothing,
                 callData = Just ((JsonAbi.methodId (DFunction "get" True
                     [] (Just [FunctionArg "d" "uint256"]))))
-            })
+            }
         theCall <- Eth.call details Latest -- TODO: switch back to using this for the result
         -- theCall <- Eth.sendTransaction details
         pure (theCall)
@@ -606,77 +549,64 @@ storeAndGetOnChainProtectedOutOfBounds = TestLabel "\"StorerAndGetter\" on chain
     assertEqual "Result" ("0x" <> testValue) getRes
     -- check the presence of the logs
 
-storeAndGetOnChainUnprotected  = TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestCase $ do
-    -- Read in the test Solidity source file. This file contains a
-    -- Solidity contract with a single unprotected SSTORE call.
-    bsEncodedFull <- compileSolidityFileBinFull "test/Models/StorerAndGetter.sol"
-    bsEncodedRunTime <- compileSolidityFileBinRunTime "test/Models/StorerAndGetter.sol"
+deployFromFile :: ([OpCode] -> [OpCode]) -> FilePath -> IO Address
+deployFromFile transform filepath = do
+    -- TODO: handle exceptions
+    bsEncodedFull <- compileSolidityFileBinFull filepath
+    bsEncodedRunTime <- compileSolidityFileBinRunTime filepath
     let
         bsDecodedFull = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedFull
             in if remainder == B.empty then bytes else error (show remainder)
         bsDecodedRunTime = let (bytes, remainder) = B16.decode $ encodeUtf8 bsEncodedRunTime
             in if remainder == B.empty then bytes else error (show remainder)
-    let bsEncoded = B16.encode bsDecodedFull
-    (Right availableAccounts) <- runWeb3 accounts
+    bytecode <- parseGoodExample bsDecodedFull :: IO [OpCode]
+    let bsEncoded = B16.encode $ B.concat $ map toByteString $ transform bytecode
+    newContractAddressRaw <- runWeb3 $ deployContractDefault bsEncoded
+    case newContractAddressRaw of
+        Right x -> pure x
+        Left e -> error $ "Contract deployment failure: " ++ show e
+
+deployContractDefault bsEncoded = do
+    availableAccounts <- accounts
     let sender = availableAccounts !! 1
-    (res, tx) <- deployContract sender bsEncoded
-    newContractAddress <- getContractAddress tx
-
-    buildCode <- parseGoodExample bsDecodedFull
-
-    (Right code) <- runWeb3 $ getCode newContractAddress Latest
-    actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
-
-    -- We are able to run test jumps as this code is now in it's deployed form
-    testJumps actualRunCode
-    let testValue = "0000000000000000000000000000000000000000000000000000000000000045"
-    -- Use a call (send a transaction) to "store" to set a particular value
-    (Right (storeRes)) <- runWeb3 $ do
-        let details = (Call {
-                callFrom = Just sender,
-                callTo = Just newContractAddress,
-                callGas = Nothing,
-                callGasPrice = Nothing,
-                callValue = Nothing,
-                callData = Just ((JsonAbi.methodId (DFunction "store" False
-                    [ FunctionArg "loo" "uint256"
-                    ] Nothing)) <> testValue)
-            })
-        theCall <- Eth.sendTransaction details
-        pure (theCall)
-    assertBool "Store Result" ("0x0" /= storeRes)
-    --  Use a call to "get" to ensure that the stored value has been correctly set.
-    (Right (getRes)) <- runWeb3 $ do
-        let details = (Call {
-                callFrom = Just sender,
-                callTo = Just newContractAddress,
-                callGas = Nothing,
-                callGasPrice = Nothing,
-                callValue = Nothing,
-                callData = Just ((JsonAbi.methodId (DFunction "get" False
-                    [] (Just [FunctionArg "d" "uint256"]))))
-            })
-        theCall <- Eth.call details Latest -- TODO: switch back to using this for the result
-        -- theCall <- Eth.sendTransaction details
-        pure (theCall)
-    assertEqual "Result" ("0x" <> testValue) getRes
+    (res, tx) <- deployContract' sender bsEncoded
+    newContractAddressRaw <- getContractAddress' tx
+    let newContractAddress = case newContractAddressRaw of
+            Nothing -> error "contract no successfully deployed"
+            Just x -> x
+    code <- getCode newContractAddress Latest
+    pure newContractAddress
+    -- assertEqual "Deployed bytecode is as expected" ("0x" <> (T.pack $ C8.unpack bsEncoded)) code
 
 deployContract sender bsEncoded =  do
     r <- runWeb3 $ do
-        let details = (Call {
+        let details = Call {
                 callFrom = Just sender,
                 callTo = Nothing,
                 callGas = Just 900000,
                 callGasPrice = Nothing,
                 callValue = Nothing,
                 callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
-            })
+            }
         theCall <- Eth.call details Latest
         theEffect <- Eth.sendTransaction details
         pure (theCall, theEffect)
     case r of
         Left e -> assertFailure $ show e
         Right x -> pure x
+
+deployContract' sender bsEncoded =do
+    let details = Call {
+            callFrom = Just sender,
+            callTo = Nothing,
+            callGas = Just 900000,
+            callGasPrice = Nothing,
+            callValue = Nothing,
+            callData = Just (T.pack $ C8.unpack $ "0x" `B.append` bsEncoded)
+        }
+    theCall <- Eth.call details Latest
+    theEffect <- Eth.sendTransaction details
+    pure (theCall, theEffect)
 
 getContractAddress tx = do
     contractAddressResult <- runWeb3 $ do
@@ -686,3 +616,7 @@ getContractAddress tx = do
             Left e -> assertFailure ("ss" ++ show e)
             Right (Just x) -> pure x
             Right Nothing -> assertFailure "No new contract address was returned"
+
+getContractAddress' tx = do
+        r <- getTransactionReceipt tx
+        pure $ txrContractAddress r
