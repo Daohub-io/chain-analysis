@@ -20,11 +20,13 @@ library
       src
   build-depends:
       base >=4.7 && <5
+      , attoparsec
+      , base16-bytestring
       , binary
       , bytestring
-      , base16-bytestring
-      , attoparsec
       , containers
+      , cryptonite
+      , memory
       , QuickCheck
   exposed-modules:
       OpCode.Exporter,
@@ -32,6 +34,7 @@ library
       OpCode.Type,
       OpCode.Utils,
       Check.Stores,
+      Check.JumpTable,
       Process
   other-modules:
       Paths_evm_mod
@@ -53,7 +56,7 @@ executable evm-mod-exe
 
 test-suite evm-mod-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Main.hs
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -79,5 +82,14 @@ test-suite evm-mod-test
   other-modules:
       Paths_evm_mod,
       CompileSolidity,
-      Models.HandWritten
+      Models.HandWritten,
+      Tests.HandleOpCodes,
+      Tests.Transform,
+      Tests.Transform.AdderOnChainProtected,
+      Tests.Transform.AdderOnChainUnprotected,
+      Tests.Transform.StoreAndGetOnChainProtectedInBounds,
+      Tests.Transform.StoreAndGetOnChainProtectedOutOfBounds,
+      Tests.Transform.StoreAndGetOnChainUnprotectedInBounds,
+      Tests.Analyse,
+      Tests.Utils
   default-language: Haskell2010

@@ -12,8 +12,12 @@
 --      an integer indicating a value that will need to be inserted later (such
 --      as the location of the jump table). These insertions are made by
 --      @replaceVars@.
+{-# LANGUAGE OverloadedStrings #-}
 module Process where
 
+import Crypto.Hash
+
+import qualified Data.ByteArray (convert)
 import Data.ByteString (empty, pack)
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode)
@@ -79,7 +83,14 @@ protectCall
     :: Capabilities-- ^Permissable address ranges
     -> OpCode -- ^The opcode being protected
     -> [OpCode]
+-- protectCall caps SSTORE = protectStoreCall caps
 protectCall caps SSTORE =
+    (protectStoreCallLeaveKey caps)
+    ++ logStoreCall
+protectCall _ code = [code]
+
+protectStoreCall :: Capabilities -> [OpCode]
+protectStoreCall caps =
     [ PUSH32 $ integerToEVM256 ll -- lower limit
     , DUP2 -- duplicate store address for comparison
     , OpCode.Type.LT -- see if address is lower than the lower limit
@@ -93,7 +104,76 @@ protectCall caps SSTORE =
     ]
     where
         (ll,ul) = caps_storageRange caps
-protectCall _ code = [code]
+
+-- |Like @protectStoreCall@ but leaves the storage key on top of the stack.
+-- Takes one, leaves one (the same value) if successful, otherwise performs an
+-- invalid jump.
+protectStoreCallLeaveKey :: Capabilities -> [OpCode]
+protectStoreCallLeaveKey caps =
+    [ PUSH32 $ integerToEVM256 ll -- lower limit
+    , DUP2 -- duplicate store address for comparison
+    , OpCode.Type.LT -- see if address is lower than the lower limit
+    , PUSH32 $ integerToEVM256 ul -- upper limit
+    , DUP3 -- duplicate store address for comparison
+    , OpCode.Type.GT -- see if the store address is higher than the upper limit
+    , OR -- set top of stack to 1 if either is true
+    , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+    , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+    , SWAP1 -- put the value on top with the key underneath
+    , DUP2 -- put a copy of the key on top
+    , SSTORE -- perform the store
+    ]
+    where
+        (ll,ul) = caps_storageRange caps
+
+-- |logCall assumes the storage key is at the top of the stack. Takes one,
+-- leaves none. See specification docs
+-- (https://github.com/DaoLab/beaker-preprocessor/docs/store-call-logging.md).
+logStoreCall :: [OpCode]
+logStoreCall =
+    -- Load the original values of our memory buffer onto the stack.
+    [ PUSH1 (pack [0x60])
+    , MLOAD
+    , PUSH1 (pack [0x80])
+    , MLOAD
+
+    -- Load the contract address onto the stack, then store it at memory
+    -- location 0x60.
+    , ADDRESS
+    , PUSH1 (pack [0x60])
+    , MSTORE
+
+    -- Take the storage key from the stack and store it at 0x80. Note that it is
+    -- in the 3rd position (beneath the two original memory values we just
+    -- loaded). Therefore we must swap it to the top of the stack. This has a
+    -- side effect in that it reverses the order of the two original memory
+    -- values. Rather than swap them back, we simply account for that later.
+    , SWAP2
+    , PUSH1 (pack [0x80])
+    , MSTORE
+
+    -- Push the topic to which we publish to the stack. (NB: this is not defined
+    -- here).
+    , PUSH32 topic
+    , PUSH1 (pack [0x34])
+    , PUSH1 (pack [0x6c])
+
+    -- Perform the LOG.
+    , LOG1
+
+    -- Restore the original memory values. Remember that the order of these is
+    -- reversed by the SWAP2 used above, there we call MSTORE in the same order
+    -- we called MLOAD.
+    , PUSH1 (pack [0x60])
+    , MSTORE
+    , PUSH1 (pack [0x80])
+    , MSTORE
+    ]
+    where
+        topic = Data.ByteArray.convert $ keccak256 "KERNEL_SSTORE"
+
+keccak256 :: B.ByteString -> Digest Keccak_256
+keccak256 bs = hash bs
 
 data Capabilities = Capabilities
     { caps_storageRange :: (Natural, Natural)
