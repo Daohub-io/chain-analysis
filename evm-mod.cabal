@@ -20,11 +20,13 @@ library
       src
   build-depends:
       base >=4.7 && <5
+      , attoparsec
+      , base16-bytestring
       , binary
       , bytestring
-      , base16-bytestring
-      , attoparsec
       , containers
+      , cryptonite
+      , memory
       , QuickCheck
   exposed-modules:
       OpCode.Exporter,

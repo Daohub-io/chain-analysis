@@ -12,8 +12,12 @@
 --      an integer indicating a value that will need to be inserted later (such
 --      as the location of the jump table). These insertions are made by
 --      @replaceVars@.
+{-# LANGUAGE OverloadedStrings #-}
 module Process where
 
+import Crypto.Hash
+
+import qualified Data.ByteArray (convert)
 import Data.ByteString (empty, pack)
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode)
@@ -166,7 +170,10 @@ logStoreCall =
     , MSTORE
     ]
     where
-        topic = integerToEVM256 0x03
+        topic = Data.ByteArray.convert $ keccak256 "KERNEL_SSTORE"
+
+keccak256 :: B.ByteString -> Digest Keccak_256
+keccak256 bs = hash bs
 
 data Capabilities = Capabilities
     { caps_storageRange :: (Natural, Natural)

@@ -62,22 +62,3 @@ takeJumpDispatch (a:b:c:d:opcodes) =
     in if isDispatch
             then (Just (), opcodes)
             else (Nothing, opcodes)
-    -- | Map.null jumpDests = []
-    -- | otherwise = [Counted (JUMPDEST, Nothing)] ++ (concat $ Map.elems $ Map.mapWithKey mkJTEntry jumpDests) ++ jumpDispatch
-    -- where
-    --     mkJTEntry old new =
-    --         [ Counted (DUP1, Nothing)
-    --         , Counted (PUSH32 (integerToEVM256 $ fromIntegral old), Nothing)
-    --         , Counted (OpCode.Type.EQ, Nothing)
-    --         , Counted (PUSH32 (integerToEVM256 $ fromIntegral new), Nothing)
-    --         , Counted (SWAP1, Nothing)
-    --         , PushVar JDispatch256
-    --         , Counted (JUMPI, Nothing)
-    --         , Counted (POP, Nothing)
-    --         ]
-    --     jumpDispatch =
-    --         [ Counted (JUMPDEST, Nothing)
-    --         , Counted (SWAP1, Nothing)
-    --         , Counted (POP, Nothing)
-    --         , Counted (JUMP, Nothing)
-    --         ]
