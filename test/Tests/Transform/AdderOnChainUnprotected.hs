@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Tests.Transform.AdderOnChainUnprotected where
+module Tests.Transform.AdderOnChainUnprotected (test) where
 
 import Control.Exception
 
@@ -18,7 +18,7 @@ import Data.Either
 import Numeric.Natural
 
 import Test.QuickCheck
-import Test.HUnit
+import Test.HUnit hiding (test)
 
 import Check.Stores
 import OpCode.Exporter
@@ -50,8 +50,8 @@ import System.IO.Temp
 import Tests.Analyse
 import Tests.Utils
 
-
-adderOnChainUntransformed = TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
+test :: Test
+test = TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
     -- Read in the test Solidity source file. This file contains a
     -- Solidity contract with a single unprotected SSTORE call.
     newContractAddress <- deployFromFile id "test/Models/Adder.sol"

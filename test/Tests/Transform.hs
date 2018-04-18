@@ -83,20 +83,19 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 dests = map snd $ countCodes code
                 expected = map Just [0,2,3,4]
             assertEqual "Jump dests should be correct" expected dests
-        -- , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
-        --     let code =
-        --             [ PUSH1 (pack [0x4])
-        --             , JUMP
-        --             , STOP
-        --             , JUMPDEST
-        --             ]
-        --         defaultCaps = Capabilities
-        --             { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
-        --             }
-        --         table = jumpTable $ jumpDests $ replaceJumps $ insertProtections defaultCaps $ countCodes code
-        --         table2 = jumpTable $ jumpDests $ replaceJumps $ countCodes code
-        --         expected = (5,[Counted (STOP, Nothing)])
-        --     assertEqual "Table should be correct" table2 table
+        , TestLabel "Jump Table Consistency Without Store" $ TestCase $ do
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , JUMP
+                    , STOP
+                    , JUMPDEST
+                    ]
+                defaultCaps = Capabilities
+                    { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
+                    }
+                tableWithProtectedStores = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes code
+                tableWithoutProtectedStores = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ countCodes code
+            assertEqual "The added jump table should be the same whether storage protection is run or not" tableWithoutProtectedStores tableWithProtectedStores
         , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
             let code =
                     [ PUSH1 (pack [0x4])
@@ -247,11 +246,11 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 theCall <- Eth.call details Latest
                 pure (theCall)
             assertEqual "Result" "0x0000000000000000000000000000000000000000000000000000000000000046" res
-        , adderOnChainUntransformed
-        , adderProtectedOnChain
-        , storeAndGetOnChainUnprotectedInBounds
-        , storeAndGetOnChainProtectedInBounds
-        , storeAndGetOnChainProtectedOutOfBounds
+        , Tests.Transform.AdderOnChainUnprotected.test
+        , Tests.Transform.AdderOnChainProtected.test
+        , Tests.Transform.StoreAndGetOnChainUnprotectedInBounds.test
+        , Tests.Transform.StoreAndGetOnChainProtectedInBounds.test
+        , Tests.Transform.StoreAndGetOnChainProtectedOutOfBounds.test
         , TestLabel "Trivial on chain" $ TestCase $ do
             let bytecode =
                     [ PUSH1 (pack [0x10])

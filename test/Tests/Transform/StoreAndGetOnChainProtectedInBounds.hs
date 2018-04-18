@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Tests.Transform.StoreAndGetOnChainProtectedInBounds where
+module Tests.Transform.StoreAndGetOnChainProtectedInBounds (test) where
 
 import Control.Exception
 
@@ -18,7 +18,7 @@ import Data.Either
 import Numeric.Natural
 
 import Test.QuickCheck
-import Test.HUnit
+import Test.HUnit hiding (test)
 
 import Check.Stores
 import OpCode.Exporter
@@ -50,8 +50,8 @@ import System.IO.Temp
 import Tests.Analyse
 import Tests.Utils
 
-storeAndGetOnChainProtectedInBounds :: Test
-storeAndGetOnChainProtectedInBounds = TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestList
+test :: Test
+test = TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestList
     [ TestLabel "Contract Deployment" $ TestCase $ do
         -- #Deployment
         -- Take the contract from the file and deploy it, returning the address.

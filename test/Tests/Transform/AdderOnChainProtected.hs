@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Tests.Transform.AdderOnChainProtected where
+module Tests.Transform.AdderOnChainProtected (test) where
 
 import Control.Exception
 
@@ -18,7 +18,7 @@ import Data.Either
 import Numeric.Natural
 
 import Test.QuickCheck
-import Test.HUnit
+import Test.HUnit hiding (test)
 
 import Check.Stores
 import OpCode.Exporter
@@ -50,7 +50,8 @@ import System.IO.Temp
 import Tests.Analyse
 import Tests.Utils
 
-adderProtectedOnChain = TestLabel "\"Adder\" on chain (transformed)" $ TestCase $ do
+test :: Test
+test = TestLabel "\"Adder\" on chain (transformed)" $ TestCase $ do
     -- Define test values.
     let testValueA = "0000000000000000000000000000000000000000000000000000000000000045"
         testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
