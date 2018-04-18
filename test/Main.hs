@@ -90,16 +90,16 @@ mainWithOpts = do
     defaultMainWithOpts tests my_runner_opts
 
 tests = -- [ testGroup "Single Test" $ hUnitTestToTests storeAndGetOnChainProtected ]
-    [ testGroup "OpCode Parser" $ (hUnitTestToTests parserTests)
-    , testGroup "Preprocessor" $ (hUnitTestToTests preprocessorTests)
-    , testProperty "Round-Trip Single OpCode" prop_anyValidOpCode_roundTrip
-    , testProperty "Round-Trip Full Bytecode" prop_anyValidBytecode_roundTrip
-    , testProperty "Monotonic Counted Bytecode" prop_anyCountedBytecode_monotonic
-    , testProperty "Preserved Counted Bytecode" prop_anyCountedBytecode_codePreserved
-    , testGroup "OpCode Checks" $ (hUnitTestToTests storeCheckerTests)
-    , testGroup "Number Handling" $ (hUnitTestToTests numberTests)
-    , testProperty "Round-Trip Natural to Bytecode" prop_integerToEVM256_roundTrip
-    , testGroup "Web3 Library" $ hUnitTestToTests web3Tests
+    [ testGroup "OpCode Parser" $ (hUnitTestToTests Tests.HandleOpCodes.parserTests)
+    , testGroup "Preprocessor" $ (hUnitTestToTests Tests.Transform.preprocessorTests)
+    , testProperty "Round-Trip Single OpCode" Main.prop_anyValidOpCode_roundTrip
+    , testProperty "Round-Trip Full Bytecode" Main.prop_anyValidBytecode_roundTrip
+    , testProperty "Monotonic Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_monotonic
+    , testProperty "Preserved Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_codePreserved
+    , testGroup "OpCode Checks" $ (hUnitTestToTests Tests.Analyse.storeCheckerTests)
+    , testGroup "Number Handling" $ (hUnitTestToTests Main.numberTests)
+    , testProperty "Round-Trip Natural to Bytecode" Main.prop_integerToEVM256_roundTrip
+    , testGroup "Web3 Library" $ hUnitTestToTests Main.web3Tests
     ]
 
 -- |This is a test of tests to ensure the methodology for web3 testing is

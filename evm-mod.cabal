@@ -82,6 +82,11 @@ test-suite evm-mod-test
       Models.HandWritten,
       Tests.HandleOpCodes,
       Tests.Transform,
+      Tests.Transform.AdderOnChainProtected,
+      Tests.Transform.AdderOnChainUnprotected,
+      Tests.Transform.StoreAndGetOnChainProtectedInBounds,
+      Tests.Transform.StoreAndGetOnChainProtectedOutOfBounds,
+      Tests.Transform.StoreAndGetOnChainUnprotectedInBounds,
       Tests.Analyse,
       Tests.Utils
   default-language: Haskell2010
