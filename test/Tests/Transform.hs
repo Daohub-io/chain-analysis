@@ -28,6 +28,7 @@ import Test.QuickCheck
 import Test.HUnit
 
 import Check.Stores
+import Check.JumpTable
 import OpCode.Exporter
 import OpCode.Parser
 import OpCode.Type
@@ -45,6 +46,7 @@ import qualified Network.Ethereum.Web3.Address as Address
 
 import Data.List
 import Data.Text (Text)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
@@ -96,107 +98,54 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 tableWithProtectedStores = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes code
                 tableWithoutProtectedStores = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ countCodes code
             assertEqual "The added jump table should be the same whether storage protection is run or not" tableWithoutProtectedStores tableWithProtectedStores
-        , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
+        , TestLabel "Should add a table for a single jump (no stores)" $ TestCase $ do
             let code =
                     [ PUSH1 (pack [0x4])
                     , JUMP
                     , STOP
                     , JUMPDEST
                     ]
-                expected =
+            case extractJumpTable $ transform defaultCaps code of
+                Just entries -> do
+                    assertEqual "The jump table should have a single entry" 1 (length entries)
+                    let [(original, remapping)] = entries
+                    assertEqual "The single jump table entry should be for 0x4" 0x4 original
+                Nothing -> assertFailure "A jump table should be present"
+        , TestLabel "Should add storage protection code (store only)" $ TestCase $ do
+            let code =
                     [ PUSH1 (pack [0x4])
-                    , PUSH32 (pack [38])
+                    , PUSH1 (pack [0x4])
+                    , SSTORE
+                    ]
+                transformed = transform defaultCaps code
+            case extractJumpTable transformed of
+                Just entries -> assertFailure "A jump table should not be present"
+                Nothing -> pure ()
+            case getRequiredCapabilities transformed of
+                Any -> assertFailure "Require capability is Any, but should be restricted"
+                Ranges rs -> assertEqual "Storage capability range should be as specified" (S.singleton $ caps_storageRange defaultCaps) (rs)
+        , TestLabel "Should add storage protection code (store and jump)" $ TestCase $ do
+            let code =
+                    [ PUSH1 (pack [0x4])
+                    , PUSH1 (pack [0x4])
+                    , SSTORE
+                    , PUSH1 (pack [0x9])
                     , JUMP
                     , STOP
                     , JUMPDEST
-                    ] ++
-                    [ JUMPDEST ] ++
-                    [ DUP1
-                    , PUSH32 (integerToEVM256 $ fromIntegral 4)
-                    , OpCode.Type.EQ
-                    , PUSH32 (integerToEVM256 $ fromIntegral 37)
-                    , SWAP1
-                    , PUSH32 (integerToEVM256 $ fromIntegral 143)
-                    , JUMPI
+                    , PUSH1 (pack [0x4])
                     , POP
-                    ] ++
-                    [ JUMPDEST
-                    , SWAP1
-                    , POP
-                    , JUMP
                     ]
-            assertEqual "Table should be added" expected (transform defaultCaps code)
-        -- , TestLabel "Should insert additional opcodes to code with SSTORE (no jump)" $ TestCase $ do
-        --     let code =
-        --             [ PUSH1 (pack [0x4])
-        --             , PUSH1 (pack [0x4])
-        --             , SSTORE
-        --             ]
-        --         expected =
-        --             [ PUSH1 (pack [0x4])
-        --             , PUSH1 (pack [0x4])
-        --             , PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
-        --             , DUP2 -- duplicate store address for comparison
-        --             , OpCode.Type.LT -- see if address is lower than the lower limit
-        --             , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
-        --             , DUP3 -- duplicate store address for comparison
-        --             , OpCode.Type.GT -- see if the store address is higher than the upper limit
-        --             , OR -- set top of stack to 1 if either is true
-        --             , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
-        --             , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
-        --             , SSTORE -- perform the store
-        --             ]
-        --         transformed = transform defaultCaps code
-        --     assertEqual "The inserted code should be as expected" expected transformed
-        -- , TestLabel "Should insert additional opcodes to code with SSTORE (plus a jump)" $ TestCase $ do
-        --     let code =
-        --             [ PUSH1 (pack [0x4])
-        --             , PUSH1 (pack [0x4])
-        --             , SSTORE
-        --             , PUSH1 (pack [0x9])
-        --             , JUMP
-        --             , STOP
-        --             , JUMPDEST
-        --             , PUSH1 (pack [0x4])
-        --             , POP
-        --             ]
-        --         expected =
-        --             [ PUSH1 (pack [0x4])
-        --             , PUSH1 (pack [0x4])
-        --             , PUSH32 $ integerToEVM256 0x0100000000000000000000000000000000000000000000000000000000000000 -- lower limit
-        --             , DUP2 -- duplicate store address for comparison
-        --             , OpCode.Type.LT -- see if address is lower than the lower limit
-        --             , PUSH32 $ integerToEVM256 0x0200000000000000000000000000000000000000000000000000000000000000 -- upper limit
-        --             , DUP3 -- duplicate store address for comparison
-        --             , OpCode.Type.GT -- see if the store address is higher than the upper limit
-        --             , OR -- set top of stack to 1 if either is true
-        --             , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
-        --             , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
-        --             , SSTORE -- perform the store
-        --             , PUSH1 (pack [0x9])
-        --             , PUSH32 (pack [119])
-        --             , JUMP
-        --             , STOP
-        --             , JUMPDEST
-        --             , PUSH1 (pack [0x4])
-        --             , POP
-        --             ] ++
-        --             [ JUMPDEST ] ++
-        --             [ DUP1
-        --             , PUSH32 (integerToEVM256 $ fromIntegral 9)
-        --             , OpCode.Type.EQ
-        --             , PUSH32 (integerToEVM256 $ fromIntegral 115)
-        --             , SWAP1
-        --             , PUSH32 (integerToEVM256 $ fromIntegral 223)
-        --             , JUMPI
-        --             ] ++
-        --             [ JUMPDEST
-        --             , SWAP1
-        --             , POP
-        --             , JUMP
-        --             ]
-        --         transformed = transform defaultCaps code
-        --     assertEqual "The inserted code should be as expected" (countCodes expected) (countCodes transformed)
+                transformed = transform defaultCaps code
+            case extractJumpTable transformed of
+                Just entries -> do
+                    assertEqual "The jump table should have a single entry" 1 (length entries)
+                    let [(original, remapping)] = entries
+                    assertEqual "The single jump table entry should be for 0x9" 0x9 original
+                Nothing -> assertFailure "A jump table should be present"
+            case getRequiredCapabilities transformed of
+                Any -> assertFailure "Require capability is Any, but should be restricted"
+                Ranges rs -> assertEqual "Storage capability range should be as specified" (S.singleton $ caps_storageRange defaultCaps) (rs)
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
