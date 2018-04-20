@@ -111,7 +111,9 @@ web3Tests = TestLabel "Web3" $ TestCase $ do
                     in if remainder == B.empty then bytes else error (show remainder)
         bsEncoded = B16.encode bsDecodedFull
     (Right availableAccounts) <- runWeb3 accounts
-    let sender = availableAccounts !! 1
+    let sender =  case availableAccounts of
+            [] -> error "No accounts available"
+            (a:_) -> a
     (res, tx) <- deployContract sender bsEncoded
     newContractAddress <- getContractAddress tx
     (Right (res)) <- runWeb3 $ do

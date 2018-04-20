@@ -179,7 +179,10 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             -- Solidity contract with a single unprotected SSTORE call.
             newContractAddress <- deployFromFile id "test/Models/StorerWithAdd.sol"
             (Right (res)) <- runWeb3 $ do
-                sender <- fmap (!! 1) accounts
+                accs <- accounts
+                let sender = case accs of
+                        [] -> error "No accounts available"
+                        (a:_) -> a
                 let details = Call {
                         callFrom = Just sender,
                         callTo = Just newContractAddress,
@@ -225,8 +228,11 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     ]
 
             let bsEncoded = B16.encode $ B.concat $ map toByteString bytecode
-            (Right availableAccounts) <- runWeb3 accounts
-            let sender = availableAccounts !! 1
+            (Right sender) <- runWeb3 $ do
+                accs <- accounts
+                case accs of
+                        [] -> error "No accounts available"
+                        (a:_) -> pure a
             (res, tx) <- deployContract sender bsEncoded
             newContractAddress <- getContractAddress tx
 

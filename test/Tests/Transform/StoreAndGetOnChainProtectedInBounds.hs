@@ -130,7 +130,10 @@ test = TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestList
         testValue = "0000000000000000000000000000000000000000000000000000000000000045"
         -- Use a call (send a transaction) to "store" to set a particular value
         storeValue newContractAddress = runWeb3 $ do
-            sender <- fmap (!! 1) accounts
+            accs <- accounts
+            let sender = case accs of
+                    [] -> error "No accounts available"
+                    (a:_) -> a
             let details = Call {
                     callFrom = Just sender,
                     callTo = Just newContractAddress,
@@ -150,7 +153,10 @@ test = TestLabel "\"StorerAndGetter\" on chain (protected, in bound)" $ TestList
             pure (theCall, theEffect)
         --  Use a call to "get" to ensure that the stored value has been correctly set.
         retrieveValue newContractAddress = runWeb3 $ do
-            sender <- fmap (!! 1) accounts
+            accs <- accounts
+            let sender = case accs of
+                    [] -> error "No accounts available"
+                    (a:_) -> a
             let details = Call {
                     callFrom = Just sender,
                     callTo = Just newContractAddress,

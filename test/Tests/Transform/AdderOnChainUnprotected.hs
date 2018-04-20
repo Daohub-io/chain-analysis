@@ -61,7 +61,10 @@ test = TestLabel "\"Adder\" on chain (untransformed)" $ TestCase $ do
         testValueB = "0000000000000000000000000000000000000000000000000000000000000003"
         testValueRes = "0000000000000000000000000000000000000000000000000000000000000048"
     resRaw <- runWeb3 $ do
-        sender <- fmap (!! 1) accounts
+        accs <- accounts
+        let sender = case accs of
+                [] -> error "No accounts available"
+                (a:_) -> a
         let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,

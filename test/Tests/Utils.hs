@@ -80,8 +80,10 @@ deployFromFile transform filepath = do
         Left e -> error $ "Contract deployment failure: " ++ show e
 
 deployContractDefault bsEncoded = do
-    availableAccounts <- accounts
-    let sender = availableAccounts !! 1
+    accs <- accounts
+    let sender = case accs of
+            [] -> error "No accounts available"
+            (a:_) -> a
     (res, tx) <- deployContract' sender bsEncoded
     newContractAddressRaw <- getContractAddress' tx
     let newContractAddress = case newContractAddressRaw of

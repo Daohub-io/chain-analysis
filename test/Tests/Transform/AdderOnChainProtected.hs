@@ -63,7 +63,10 @@ test = TestLabel "\"Adder\" on chain (transformed)" $ TestCase $ do
     assertBool "The address should not be the zero address" (newContractAddress /= Address.zero)
 
     resRaw <- runWeb3 $ do
-        sender <- fmap (!! 1) accounts
+        accs <- accounts
+        let sender = case accs of
+                [] -> error "No accounts available"
+                (a:_) -> a
         let details = Call {
                 callFrom = Just sender,
                 callTo = Just newContractAddress,
