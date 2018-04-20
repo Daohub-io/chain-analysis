@@ -9,5 +9,5 @@ extra-deps:
 - type-natural-0.8.0.0
 - ethereum-rlp-0.1.0
 - git: git@github.com:Daolab/hs-web3.git
-  commit: 313479dc5dd3fd3b0cd162ec3621dea82a06a134
+  commit: 85c555509d9a68ccda78ad67fbca18cd89961cd8
 resolver: lts-11.1
