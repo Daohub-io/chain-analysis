@@ -27,10 +27,12 @@ library
       , containers
       , cryptonite
       , memory
+      , parsec
       , QuickCheck
   exposed-modules:
       OpCode.Exporter,
       OpCode.Parser,
+      OpCode.StructureParser,
       OpCode.Type,
       OpCode.Utils,
       Check.Stores,
@@ -69,6 +71,7 @@ test-suite evm-mod-test
     , containers
     , directory
     , filepath
+    , parsec
     , process
     , temporary
     , text

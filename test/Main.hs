@@ -5,6 +5,7 @@ module Main where
 import Control.Exception
 
 import Data.Attoparsec.ByteString
+import qualified Text.Parsec.Prim as Parsec
 import Data.ByteString (pack)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8 (pack, unpack)
@@ -30,6 +31,7 @@ import Test.HUnit
 import Check.Stores
 import OpCode.Exporter
 import OpCode.Parser
+import OpCode.StructureParser
 import OpCode.Type
 import Process
 import OpCode.Utils
@@ -91,16 +93,114 @@ mainWithOpts = do
 
 tests = -- [ testGroup "Single Test" $ hUnitTestToTests storeAndGetOnChainProtected ]
     [ testGroup "OpCode Parser" $ (hUnitTestToTests Tests.HandleOpCodes.parserTests)
-    , testGroup "Preprocessor" $ (hUnitTestToTests Tests.Transform.preprocessorTests)
-    , testProperty "Round-Trip Single OpCode" Main.prop_anyValidOpCode_roundTrip
-    , testProperty "Round-Trip Full Bytecode" Main.prop_anyValidBytecode_roundTrip
-    , testProperty "Monotonic Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_monotonic
-    , testProperty "Preserved Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_codePreserved
-    , testGroup "OpCode Checks" $ (hUnitTestToTests Tests.Analyse.storeCheckerTests)
-    , testGroup "Number Handling" $ (hUnitTestToTests Main.numberTests)
-    , testProperty "Round-Trip Natural to Bytecode" Main.prop_integerToEVM256_roundTrip
-    , testGroup "Web3 Library" $ hUnitTestToTests Main.web3Tests
+    -- , testGroup "Preprocessor" $ (hUnitTestToTests Tests.Transform.preprocessorTests)
+    -- , testProperty "Round-Trip Single OpCode" Main.prop_anyValidOpCode_roundTrip
+    -- , testProperty "Round-Trip Full Bytecode" Main.prop_anyValidBytecode_roundTrip
+    -- , testProperty "Monotonic Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_monotonic
+    -- , testProperty "Preserved Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_codePreserved
+    -- , testGroup "OpCode Checks" $ (hUnitTestToTests Tests.Analyse.storeCheckerTests)
+    -- , testGroup "Number Handling" $ (hUnitTestToTests Main.numberTests)
+    -- , testProperty "Round-Trip Natural to Bytecode" Main.prop_integerToEVM256_roundTrip
+    -- , testGroup "Web3 Library" $ hUnitTestToTests Main.web3Tests
+    , testGroup "Structure Parser" $ hUnitTestToTests Main.structureParserTests
     ]
+
+structureParserTests = TestList
+    [ TestLabel "Parse single opcode" $ TestCase $ do
+        let parseRes = Parsec.parse (opCode POP) "TestInput" [POP]
+        assertEqual "Parsed value should be POP" (Right POP) parseRes
+    , TestLabel "Parse push value" $ TestCase $ do
+        let parseRes = Parsec.parse (pushVal) "TestInput" [PUSH1 (B.pack [0x4])]
+        assertEqual "Parsed value should be 0x4" (Right 0x4) parseRes
+    , TestLabel "Fail to parse single opcode" $ TestCase $ do
+        let parseRes = Parsec.parse (opCode XOR) "TestInput" [POP]
+        case parseRes of
+            Left _ -> pure ()
+            Right r -> assertFailure (show r ++ " should not have been parsed")
+    , TestLabel "Simple combo (no push)" $ TestCase $ do
+        let testCombo =
+                [ POP
+                , XOR
+                , ADDRESS
+                ]
+            notTestCombo =
+                [ POP
+                , XOR
+                , REVERT
+                ]
+            testComboParser = do
+                opCode POP
+                opCode XOR
+                opCode ADDRESS
+                pure ()
+        let parseResGood = Parsec.parse testComboParser "TestInput" testCombo
+        assertEqual
+            "Input should be parsed and return nothing (as in \"()\")"
+            (Right ())
+            parseResGood
+        let parseResBad = Parsec.parse testComboParser "TestInput" notTestCombo
+        case parseResBad of
+            Left _ -> pure ()
+            Right r -> assertFailure (show r ++ " should not have been parsed")
+    , TestLabel "Protected call" $ TestCase $ do
+        let ll = 0x1
+            ul = 0x2
+            topic = keccak256Bytes "KERNEL_SSTORE"
+        let testCombo =
+                [ PUSH32 $ integerToEVM256 ll -- lower limit
+                , DUP2 -- duplicate store address for comparison
+                , OpCode.Type.LT -- see if address is lower than the lower limit
+                , PUSH32 $ integerToEVM256 ul -- upper limit
+                , DUP3 -- duplicate store address for comparison
+                , OpCode.Type.GT -- see if the store address is higher than the upper limit
+                , OR -- set top of stack to 1 if either is true
+                , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+                , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+                , SWAP1 -- put the value on top with the key underneath
+                , DUP2 -- put a copy of the key on top
+                , SSTORE -- perform the store
+
+                , PUSH1 (pack [0x60])
+                , MLOAD
+                , PUSH1 (pack [0x80])
+                , MLOAD
+
+                , ADDRESS
+                , PUSH1 (pack [0x60])
+                , MSTORE
+
+                , SWAP2
+                , PUSH1 (pack [0x80])
+                , MSTORE
+
+                , PUSH32 topic
+                , PUSH1 (pack [0x34])
+                , PUSH1 (pack [0x6c])
+
+                , LOG1
+
+                , PUSH1 (pack [0x60])
+                , MSTORE
+                , PUSH1 (pack [0x80])
+                , MSTORE
+                ]
+            notTestCombo =
+                [ POP
+                , XOR
+                , REVERT
+                ]
+        let parseResGood = Parsec.parse parseLoggedAndProtectedSSTORE "TestInput" testCombo
+        assertEqual
+            "Input should be parsed and return the correct store range"
+            (Right (1,2))
+            parseResGood
+        let parseResBad = Parsec.parse parseLoggedAndProtectedSSTORE "TestInput" notTestCombo
+        case parseResBad of
+            Left _ -> pure ()
+            Right r -> assertFailure (show r ++ " should not have been parsed")
+    ]
+
+
 
 -- |This is a test of tests to ensure the methodology for web3 testing is
 -- correct.

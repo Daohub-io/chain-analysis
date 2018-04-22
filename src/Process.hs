@@ -15,9 +15,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Process where
 
-import Crypto.Hash
-
-import qualified Data.ByteArray (convert)
 import Data.ByteString (empty, pack)
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encode)
@@ -170,10 +167,7 @@ logStoreCall =
     , MSTORE
     ]
     where
-        topic = Data.ByteArray.convert $ keccak256 "KERNEL_SSTORE"
-
-keccak256 :: B.ByteString -> Digest Keccak_256
-keccak256 bs = hash bs
+        topic = keccak256Bytes "KERNEL_SSTORE"
 
 data Capabilities = Capabilities
     { caps_storageRange :: (Natural, Natural)
