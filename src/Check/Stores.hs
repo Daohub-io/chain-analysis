@@ -24,7 +24,7 @@ getRequiredCapabilities code = do
 
 getRequiredCapabilities'
     :: StorageRange -- ^Accumulates storage requirements
-    -> [StructuredCode] -- ^Unprocessed @OpCode@s
+    -> [StructuredCode] -- ^Unprocessed @StructureCode@s
     -> StorageRange
 getRequiredCapabilities' Any _ = Any
 getRequiredCapabilities' (Ranges rs) ((ProtectedStoreCall range):cs) =
@@ -34,6 +34,8 @@ getRequiredCapabilities' rcaps (UnprotectedStoreCall:cs) = getRequiredCapabiliti
 getRequiredCapabilities' rcaps (_:cs) = getRequiredCapabilities' rcaps cs
 getRequiredCapabilities' rcaps [] = rcaps
 
+-- |This only checks tht protection is in place, not that it is the correct
+-- protection.
 checkStores :: [OpCode] -> Either ParseError Bool
 checkStores code = do
     parsed <- fullStructuredParse code
@@ -42,23 +44,13 @@ checkStores code = do
 isUnprotectedStore UnprotectedStoreCall = True
 isUnprotectedStore _ = False
 
-checkStores' :: [OpCode] -> Bool
-checkStores' codes@(a:b:c:d:e:f:g:h:i:j:k:l:cs)
-    | not (isSSTORE l) = checkStores' (b:c:d:e:f:g:h:i:j:k:l:cs)
-    | otherwise = case Parsec.parse parseLoggedAndProtectedSSTORE "CheckStoresInput" codes of
-        Right (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000) -> checkStores' (b:c:d:e:f:g:h:i:j:k:l:cs)
-        _ -> False
-checkStores' _ = True
-
 -- |Check whether a sequence of @OpCode@s constitutes a protected SSTORE. Must
 -- include the SSTORE call. Returns the required range if it is.
 isProtectedStore :: [OpCode] -> Maybe (Natural, Natural)
-isProtectedStore codes@(a:b:c:d:e:f:g:h:i:j:k:SSTORE:cs) =
+isProtectedStore codes =
     case Parsec.parse parseLoggedAndProtectedSSTORE "isProtectedStore" codes of
             Right range -> Just range
             _ -> Nothing
-isProtectedStore _ = Nothing
-
 
 isPUSH32 (PUSH32 _) = True
 isPUSH32 _ = False
