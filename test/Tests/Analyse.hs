@@ -29,6 +29,7 @@ import Test.HUnit
 
 import Check.Stores
 import OpCode.Exporter
+import OpCode.StructureParser
 import OpCode.Parser
 import OpCode.Type
 import Process
@@ -58,20 +59,32 @@ import Tests.Utils
 
 storeCheckerTests = TestLabel "Store Checker" $ TestList $
     [ TestLabel "Should Pass Empty Code" $ TestCase $ do
-        assertBool "Empty bytecode should pass store checker" (checkStores [])
+        let checkPass = case checkStores [] of
+                Left e -> error $ show e
+                Right x -> x
+        assertBool "Empty bytecode should pass store checker" checkPass
     , TestLabel "Should Pass Code Without SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
-            assertBool "Calls without should pass store checker" (checkStores [PUSH1 (pack [0x4]), POP])
+            let checkPass = case checkStores [PUSH1 (pack [0x4]), POP] of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool "Calls without should pass store checker" checkPass
         , TestLabel "\"Adder\"" $ TestCase $ do
             -- Read in the test data file
             bsDecoded <- compileSolidityFileBin "test/Models/Adder.sol"
             code <- parseGoodExample bsDecoded
-            assertBool "Calls without should pass store checker" (checkStores code)
+            let checkPass = case checkStores code of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool "Calls without should pass store checker" checkPass
         , TestLabel "\"Fib\"" $ TestCase $ do
             -- Read in the test data file
             bsDecoded <- compileSolidityFileBin "test/Models/Fib.sol"
             code <- parseGoodExample bsDecoded
-            assertBool "Calls without should pass store checker" (checkStores code)
+            let checkPass = case checkStores code of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool "Calls without should pass store checker" checkPass
         ]
     , TestLabel "Should Reject Code With unprotected SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
@@ -82,22 +95,44 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
                     , PUSH1 (pack [0x0])
                     , SSTORE
                     ]
-            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+            let checkPass = case checkStores code of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool
+                "Calls with unprotected SSTORE should not pass store checker"
+                (not checkPass)
         , TestLabel "\"Storer\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
             -- Solidity contract with a single unprotected SSTORE call.
             bsDecoded <- compileSolidityFileBin "test/Models/Storer.sol"
             code <- parseGoodExample bsDecoded
-            assertBool "Calls with unprotected SSTORE should not pass store checker" (not $ checkStores code)
+            let checkPass = case checkStores code of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool
+                "Calls with unprotected SSTORE should not pass store checker"
+                (not checkPass)
+        , TestLabel "\"Storer\" getCapabilities" $ TestCase $ do
+            -- Read in the test Solidity source file. This file contains a
+            -- Solidity contract with a single unprotected SSTORE call.
+            bsDecoded <- compileSolidityFileBin "test/Models/Storer.sol"
+            code <- parseGoodExample bsDecoded
+            let lowerLimit = 0x0100000000000000000000000000000000000000000000000000000000000000
+                upperLimit = 0x0200000000000000000000000000000000000000000000000000000000000000
+            let Right parsed =  fullStructuredParse code
+            assertEqual
+                "Calls with unprotected SSTORE should require Any writie cap"
+                (Right $ Any)
+                (getRequiredCapabilities code)
         ]
     , TestLabel "Should Pass Code With protected SSTORE calls" $ TestList
         [ TestLabel "Trivial Example" $ TestCase $ do
             -- This is example code that consists of a single protected SSTORE
             -- call.
-            let
-                lowerLimit = 0x0100000000000000000000000000000000000000000000000000000000000000
+            let lowerLimit = 0x0100000000000000000000000000000000000000000000000000000000000000
                 upperLimit = 0x0200000000000000000000000000000000000000000000000000000000000000
-                code =
+                topic = keccak256Bytes "KERNEL_SSTORE"
+            let code =
                     [ PUSH32 $ integerToEVM256 lowerLimit -- lower limit
                     , DUP2 -- duplicate store address for comparison
                     , OpCode.Type.LT -- see if address is lower than the lower limit
@@ -110,10 +145,39 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
                     , SWAP1 -- put the value on top with the key underneath
                     , DUP2 -- put a copy of the key on top
                     , SSTORE -- perform the store
+
+                    , PUSH1 (pack [0x60])
+                    , MLOAD
+                    , PUSH1 (pack [0x80])
+                    , MLOAD
+
+                    , ADDRESS
+                    , PUSH1 (pack [0x60])
+                    , MSTORE
+
+                    , SWAP2
+                    , PUSH1 (pack [0x80])
+                    , MSTORE
+
+                    , PUSH32 topic
+                    , PUSH1 (pack [0x34])
+                    , PUSH1 (pack [0x6c])
+
+                    , LOG1
+
+                    , PUSH1 (pack [0x60])
+                    , MSTORE
+                    , PUSH1 (pack [0x80])
+                    , MSTORE
                     ]
-            assertBool "Protected stored calls should pass store checker" (checkStores code)
+            let checkPass = case checkStores code of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool
+                "Protected stored calls should pass store checker"
+                checkPass
             assertEqual "Protected store a calls should match the required capabilities"
-                (Ranges $ S.fromList [(lowerLimit, upperLimit)])
+                (Right $ Ranges $ S.fromList [(lowerLimit, upperLimit)])
                 (getRequiredCapabilities code)
         , TestLabel "\"StoreProtectedInline\"" $ TestCase $ do
             -- Read in the test Solidity source file. This file contains a
@@ -121,7 +185,12 @@ storeCheckerTests = TestLabel "Store Checker" $ TestList $
             -- necessary protection code entered in Solidity assembly.
             bsDecoded <- compileSolidityFileBin "test/Models/Protection/StorerProtectedInline.sol"
             code <- parseGoodExample bsDecoded
-            assertBool "Protected stored calls should pass store checker" (checkStores code)
+            let checkPass = case checkStores code of
+                    Left e -> error $ show e
+                    Right x -> x
+            assertBool
+                "Protected stored calls should pass store checker"
+                (not checkPass)
         ]
     ]
 

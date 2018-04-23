@@ -68,8 +68,8 @@ test = TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestLi
         -- hash, otherwise failure.
         case storeResult of
             Right (storeRes, storeTx) -> do
-                assertEqual "Store result should be null (there is no return value)" "0x0" storeRes
-                assertBool "Store transaction hash should not be zero" ("0x0" /= storeTx)
+                assertEqual "Store result should be null (there is no return value)" nullRes storeRes
+                assertBool "Store transaction hash should not be zero" (nullRes /= storeTx)
             Left e -> assertFailure $ "Store call should succeed (" ++ show e ++ ")"
     , TestLabel "Retrieve Value" $ TestCase $ do
         -- #Deployment
@@ -82,8 +82,8 @@ test = TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestLi
         -- hash, otherwise failure.
         case storeResult of
             Right (storeRes, storeTx) -> do
-                assertEqual "Store result should be null (there is no return value)" "0x0" storeRes
-                assertBool "Store transaction hash should not be zero" ("0x0" /= storeTx)
+                assertEqual "Store result should be null (there is no return value)" nullRes storeRes
+                assertBool "Store transaction hash should not be zero" (nullRes /= storeTx)
             Left e -> assertFailure $ "Store call should succeed (" ++ show e ++ ")"
         -- #Retrieve
         -- Retrieve the value (using the retrieveValue function defined below)
@@ -104,8 +104,8 @@ test = TestLabel "\"StorerAndGetter\" on chain (unprotected, in bound)" $ TestLi
         -- hash, otherwise failure.
         case storeResult of
             Right (storeRes, storeTx) -> do
-                assertEqual "Store result should be null (there is no return value)" "0x0" storeRes
-                assertBool "Store transaction hash should not be zero" ("0x0" /= storeTx)
+                assertEqual "Store result should be null (there is no return value)" nullRes storeRes
+                assertBool "Store transaction hash should not be zero" (nullRes /= storeTx)
             Left e -> assertFailure $ "Store call should succeed (" ++ show e ++ ")"
         -- #Retrieve
         -- Retrieve the value (using the retrieveValue function defined below)

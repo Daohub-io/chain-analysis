@@ -93,15 +93,15 @@ mainWithOpts = do
 
 tests = -- [ testGroup "Single Test" $ hUnitTestToTests storeAndGetOnChainProtected ]
     [ testGroup "OpCode Parser" $ (hUnitTestToTests Tests.HandleOpCodes.parserTests)
-    -- , testGroup "Preprocessor" $ (hUnitTestToTests Tests.Transform.preprocessorTests)
-    -- , testProperty "Round-Trip Single OpCode" Main.prop_anyValidOpCode_roundTrip
-    -- , testProperty "Round-Trip Full Bytecode" Main.prop_anyValidBytecode_roundTrip
-    -- , testProperty "Monotonic Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_monotonic
-    -- , testProperty "Preserved Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_codePreserved
-    -- , testGroup "OpCode Checks" $ (hUnitTestToTests Tests.Analyse.storeCheckerTests)
-    -- , testGroup "Number Handling" $ (hUnitTestToTests Main.numberTests)
-    -- , testProperty "Round-Trip Natural to Bytecode" Main.prop_integerToEVM256_roundTrip
-    -- , testGroup "Web3 Library" $ hUnitTestToTests Main.web3Tests
+    , testGroup "Preprocessor" $ (hUnitTestToTests Tests.Transform.preprocessorTests)
+    , testProperty "Round-Trip Single OpCode" Main.prop_anyValidOpCode_roundTrip
+    , testProperty "Round-Trip Full Bytecode" Main.prop_anyValidBytecode_roundTrip
+    , testProperty "Monotonic Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_monotonic
+    , testProperty "Preserved Counted Bytecode" Tests.HandleOpCodes.prop_anyCountedBytecode_codePreserved
+    , testGroup "OpCode Checks" $ (hUnitTestToTests Tests.Analyse.storeCheckerTests)
+    , testGroup "Number Handling" $ (hUnitTestToTests Main.numberTests)
+    , testProperty "Round-Trip Natural to Bytecode" Main.prop_integerToEVM256_roundTrip
+    , testGroup "Web3 Library" $ hUnitTestToTests Main.web3Tests
     , testGroup "Structure Parser" $ hUnitTestToTests Main.structureParserTests
     ]
 
@@ -146,44 +146,7 @@ structureParserTests = TestList
         let ll = 0x1
             ul = 0x2
             topic = keccak256Bytes "KERNEL_SSTORE"
-        let testCombo =
-                [ PUSH32 $ integerToEVM256 ll -- lower limit
-                , DUP2 -- duplicate store address for comparison
-                , OpCode.Type.LT -- see if address is lower than the lower limit
-                , PUSH32 $ integerToEVM256 ul -- upper limit
-                , DUP3 -- duplicate store address for comparison
-                , OpCode.Type.GT -- see if the store address is higher than the upper limit
-                , OR -- set top of stack to 1 if either is true
-                , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
-                , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
-                , SWAP1 -- put the value on top with the key underneath
-                , DUP2 -- put a copy of the key on top
-                , SSTORE -- perform the store
-
-                , PUSH1 (pack [0x60])
-                , MLOAD
-                , PUSH1 (pack [0x80])
-                , MLOAD
-
-                , ADDRESS
-                , PUSH1 (pack [0x60])
-                , MSTORE
-
-                , SWAP2
-                , PUSH1 (pack [0x80])
-                , MSTORE
-
-                , PUSH32 topic
-                , PUSH1 (pack [0x34])
-                , PUSH1 (pack [0x6c])
-
-                , LOG1
-
-                , PUSH1 (pack [0x60])
-                , MSTORE
-                , PUSH1 (pack [0x80])
-                , MSTORE
-                ]
+        let testCombo = protectedStoreExample ll ul
             notTestCombo =
                 [ POP
                 , XOR
@@ -198,9 +161,87 @@ structureParserTests = TestList
         case parseResBad of
             Left _ -> pure ()
             Right r -> assertFailure (show r ++ " should not have been parsed")
+    , TestLabel "Protected call (full parse)" $ TestCase $ do
+        let ll = 0x1
+            ul = 0x2
+        let testCombo = protectedStoreExample ll ul
+            notTestCombo =
+                [ POP
+                , XOR
+                , REVERT
+                ]
+        let parseRes = fullStructuredParse testCombo
+        assertEqual
+            "Input should be parsed and return a single protected store with the correct store range"
+            (Right [ProtectedStoreCall (ll,ul)])
+            parseRes
+    , TestLabel "Protected call (full parse) plus padding" $ TestCase $ do
+        let ll = 0x1
+            ul = 0x2
+        let testCombo = notTestCombo ++ (protectedStoreExample ll ul) ++ notTestCombo
+            notTestCombo =
+                [ POP
+                , XOR
+                , REVERT
+                , SSTORE
+                ]
+        let parseRes = fullStructuredParse testCombo
+        assertEqual
+            "Input should be parsed and return a single protected store with the correct store range"
+            (Right
+                [ OtherOpCode POP
+                , OtherOpCode XOR
+                , OtherOpCode REVERT
+                , UnprotectedStoreCall
+                , ProtectedStoreCall (ll,ul)
+                , OtherOpCode POP
+                , OtherOpCode XOR
+                , OtherOpCode REVERT
+                , UnprotectedStoreCall
+                ])
+            parseRes
     ]
 
+protectedStoreExample ll ul =
+    [ PUSH32 $ integerToEVM256 ll -- lower limit
+    , DUP2 -- duplicate store address for comparison
+    , OpCode.Type.LT -- see if address is lower than the lower limit
+    , PUSH32 $ integerToEVM256 ul -- upper limit
+    , DUP3 -- duplicate store address for comparison
+    , OpCode.Type.GT -- see if the store address is higher than the upper limit
+    , OR -- set top of stack to 1 if either is true
+    , PC -- push the program counter to the stack, this is guaranteed to be an invalid jump destination
+    , JUMPI -- jump if the address is out of bounds, the current address on the stack is guaranteed to be invliad and will throw an error
+    , SWAP1 -- put the value on top with the key underneath
+    , DUP2 -- put a copy of the key on top
+    , SSTORE -- perform the store
 
+    , PUSH1 (pack [0x60])
+    , MLOAD
+    , PUSH1 (pack [0x80])
+    , MLOAD
+
+    , ADDRESS
+    , PUSH1 (pack [0x60])
+    , MSTORE
+
+    , SWAP2
+    , PUSH1 (pack [0x80])
+    , MSTORE
+
+    , PUSH32 topic
+    , PUSH1 (pack [0x34])
+    , PUSH1 (pack [0x6c])
+
+    , LOG1
+
+    , PUSH1 (pack [0x60])
+    , MSTORE
+    , PUSH1 (pack [0x80])
+    , MSTORE
+    ]
+    where
+        topic = keccak256Bytes "KERNEL_SSTORE"
 
 -- |This is a test of tests to ensure the methodology for web3 testing is
 -- correct.

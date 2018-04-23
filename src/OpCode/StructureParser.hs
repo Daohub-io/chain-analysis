@@ -6,6 +6,7 @@ import Numeric.Natural
 
 import qualified Data.ByteString as B
 
+import Text.Parsec.Error
 import Text.Parsec.Prim
 import Text.Parsec.Combinator
 
@@ -22,11 +23,31 @@ satisfy f           = tokenPrim (\c -> show [c])
 opCode :: (Stream s m OpCode) => OpCode -> ParsecT s u m OpCode
 opCode opc = satisfy ((==) opc)
 
+anyOpCode :: (Stream s m OpCode) => ParsecT s u m OpCode
+anyOpCode = satisfy (const True)
+
 pushVal :: (Stream s m OpCode) => ParsecT s u m Natural
 pushVal = tokenPrim (\c -> show [c])
     -- (\pos c _cs -> updatePosChar pos c)
     (\pos c _cs -> pos)
     (\c -> if isPush c then Just (getPushVal c) else Nothing)
+
+
+data StructuredCode
+    = ProtectedStoreCall (Natural, Natural)
+    | UnprotectedStoreCall
+    | OtherOpCode OpCode
+    deriving (Show, Eq)
+
+fullStructuredParse ::[OpCode] -> Either ParseError [StructuredCode]
+fullStructuredParse code = parse (fullStructureParser <* eof) "fullStructuredParse" code
+
+fullStructureParser :: (Stream s m OpCode) => ParsecT s u m [StructuredCode]
+fullStructureParser = many (choice
+    [ ProtectedStoreCall <$> (try parseLoggedAndProtectedSSTORE)
+    , pure UnprotectedStoreCall <* (opCode SSTORE)
+    , OtherOpCode <$> anyOpCode
+    ])
 
 parseLoggedAndProtectedSSTORE :: (Stream s m OpCode) => ParsecT s u m (Natural, Natural)
 parseLoggedAndProtectedSSTORE = do
