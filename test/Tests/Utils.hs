@@ -53,6 +53,9 @@ import System.FilePath
 import System.Process
 import System.IO.Temp
 
+nullRes :: Text
+nullRes = "0x0"
+
 runWeb3 :: Web3 a -> IO (Either Web3Error a)
 runWeb3 = runWeb3' (HttpProvider "http://localhost:8545")
 

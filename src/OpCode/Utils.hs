@@ -1,6 +1,10 @@
 module OpCode.Utils where
 
+import Crypto.Hash
+
+import qualified Data.ByteArray (convert)
 import Data.ByteString hiding (unfoldr, foldl')
+import qualified Data.ByteString as B
 import Data.Monoid
 import Data.Binary
 import Data.Binary.Put
@@ -48,3 +52,9 @@ roll :: (Integral a, Bits a) => [Word8] -> a
 roll   = foldl' unstep 0 . Prelude.reverse
     where
         unstep a b = a `shiftL` 8 .|. fromIntegral b
+
+keccak256Bytes :: B.ByteString -> B.ByteString
+keccak256Bytes = Data.ByteArray.convert . keccak256
+
+keccak256 :: B.ByteString -> Digest Keccak_256
+keccak256 bs = hash bs

@@ -66,8 +66,9 @@ test = TestLabel "\"StorerAndGetter\" on chain (protected, out of bounds)" $ Tes
         storeResult <- storeValue newContractAddress
         -- If the store is successful, check that the result is a valid transaction
         -- hash, otherwise failure.
+        -- TODO: check the behaviour of the RPC and hsweb3 in regards to failure
         case storeResult of
-            Right (storeRes, storeTx) -> assertFailure $ "Store call should not succeed (" ++ show storeRes ++ ")"
+            Right (storeRes, storeTx) -> assertFailure $ "Store call should not succeed (" ++ show (storeRes, storeTx) ++ ")"
             Left e -> pure ()
     , TestLabel "Retrieve Value" $ TestCase $ do
         -- #Deployment
@@ -76,11 +77,6 @@ test = TestLabel "\"StorerAndGetter\" on chain (protected, out of bounds)" $ Tes
         -- #Store
         -- Store the test value (using the storeValue function defined below)
         storeResult <- storeValue newContractAddress
-        -- If the store is successful, check that the result is a valid transaction
-        -- hash, otherwise failure.
-        case storeResult of
-            Right (storeRes, storeTx) -> assertFailure $ "Store call should not succeed (" ++ show storeRes ++ ")"
-            Left e -> pure ()
         -- #Retrieve
         -- Retrieve the value (using the retrieveValue function defined below)
         retrieveResult <- retrieveValue newContractAddress
@@ -96,19 +92,6 @@ test = TestLabel "\"StorerAndGetter\" on chain (protected, out of bounds)" $ Tes
         -- #Store
         -- Store the test value (using the storeValue function defined below)
         storeResult <- storeValue newContractAddress
-        -- If the store is successful, check that the result is a valid transaction
-        -- hash, otherwise failure.
-        case storeResult of
-            Right (storeRes, storeTx) -> assertFailure $ "Store call should not succeed (" ++ show storeRes ++ ")"
-            Left e -> pure ()
-        -- #Retrieve
-        -- Retrieve the value (using the retrieveValue function defined below)
-        retrieveResult <- retrieveValue newContractAddress
-        -- If the retrieval is successful, check that the result is the expected
-        -- value.
-        case retrieveResult of
-            Right getRes -> assertEqual "The retrieved result should be zero as the store should not have succeeded" ("0x" <> "0000000000000000000000000000000000000000000000000000000000000000") getRes
-            Left e -> assertFailure $  "A value should be successfully retrieved (" ++ show e ++ ")"
         -- #View Logs
         -- Retrieve the logs from this contract.
         (Right logs) <- runWeb3 $ getAllLogs newContractAddress
