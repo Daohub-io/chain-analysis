@@ -26,6 +26,8 @@ import Numeric.Natural
 
 import Debug.Trace
 
+-- |These are the default capabilities used for testing.
+defaultCaps :: Capabilities
 defaultCaps = Capabilities
     { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
     }
@@ -183,6 +185,35 @@ data VarOpCode = Counted CountedOpCode | PushVar PushVarVal deriving (Eq, Show)
 data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 
 -- |TODO: this is a temporary proof of concept and is hardcoded to Solidity.
+--
+-- TODO: should use the structured code parser
+--
+-- CODECOPY takes a length and a
+-- byte offset from which to start copying code into memory. In order for a
+-- contract to be created, bytecode is sent in a transaction. This bytecode is
+-- then run *once*. This run should return a new bytecode, which is the bytecode
+-- which forms the contract. To return code we need to use the RETURN opcode.
+-- The return value is a section of memory indicated by a start offset an a
+-- length, which are passed to the return opcode. RETURN is called with the
+-- stack as follows.
+--
+-- @
+--   TOP: 1. start_offset: the memory offset of the start of the return value.
+--        2. length: the length of the return value in bytes
+-- @
+--
+-- However, this requires that the final bytecode reside in memory. Therefore,
+-- the code must be copied into memory. This is done via the CODECOPY opcode,
+-- which takes a starting offset into the code, and a length, and copies that
+-- length of code into a specified memory location. CODECOPY is called with the
+-- stack as follows:
+--
+-- @
+--   TOP: 1. start_mem_offest: The memory offset to start copying code to
+--        2. code_start_offset: The bytecode offset to start copying code from
+--        3. code_length: The length of code in bytes to be copied.
+-- @
+
 replaceCodeCopy :: [OpCode] -> [OpCode]
 replaceCodeCopy code = replaceCodeCopy' lastByte [] code
     where
@@ -208,6 +239,7 @@ replaceJumps codes = (codes >>= (\ccode -> case ccode of
     j@(JUMP, Just _) -> [ PushVar JumpTableDest256, Counted j]
     -- we don't want to do this to the first jump, so if it is in position 10,
     -- do nothing.
+    -- TODO: this is a hack to match solidity init code and should be fixed.
     j@(JUMPI, Just 10) -> [ Counted j]
     j@(JUMPI, Just _) -> [ Counted (SWAP1, Nothing), PushVar JumpTableDest256, Counted j, Counted (POP, Nothing)]
     _ -> [Counted ccode])
@@ -221,7 +253,6 @@ appendJumpTable codes = (jumpTableDest, jumpDispatchDest, codes ++ table)
         codeOffset = case findCodeOffset codes of
             Just x -> -1*(fromIntegral x)
             Nothing -> 0
-        -- codeOffset = -0x1d
         table = jumpTable (jumpDests codeOffset codes)
         jumpTableDest = (\x->x+codeOffset) $ (+1) $ (\(_,i)->i) $ last $ countVarOpCodes codes
         -- jumpDispatchDest does not need the code offest as it's already
@@ -252,9 +283,7 @@ nBytesVar (PushVar x) = 1 + 32
 -- if (pop == j1) PushVar j1; jump
 -- ...
 -- if (pop == jk) PushVar jk; jump
--- TODO: implement
 jumpTable :: Map.Map Integer Integer -> [VarOpCode]
--- jumpTable jumpDests = [ PushVar tailJumpDest ] ++ map PushVar jumpDests
 jumpTable jumpDests
     | Map.null jumpDests = []
     | otherwise = [Counted (JUMPDEST, Nothing)] ++ (concat $ Map.elems $ Map.mapWithKey mkJTEntry jumpDests) ++ jumpDispatch
@@ -299,5 +328,3 @@ replaceVars (jumpTableDest, jumpDispatchDest, varOpCodes) = map (\vCode -> case 
     PushVar JDispatch256 -> PUSH32 (integerToEVM256 $ fromIntegral jumpDispatchDest)
     Counted (code, _) -> code
     ) varOpCodes
-    -- where --TODO: catch exceptions properly!
-    --     varMap = varMapping varOpCodes
