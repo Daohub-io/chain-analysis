@@ -258,5 +258,19 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
             actualRunCode <- parseGoodExample $ fst $ B16.decode $ B.drop 2 $ encodeUtf8 code
             pure ()
         ]
+    , TestLabel "Init Presence" $ TestList
+        [ TestLabel "\"Ballot\"" $ TestCase $ do
+            -- #Deployment
+            -- Take the contract from the file and deploy it, returning the address.
+            r <- Control.Exception.try $ deployFromFile (transform defaultCaps) "test/Models/Ballot.sol" :: IO (Either SomeException Address.Address)
+            case r of
+                Left _ -> pure ()
+                Right _ -> assertFailure "Contract transformation should have failed due to unrecognised init"
+        , TestLabel "\"BallotNoConstructor\"" $ TestCase $ do
+            -- #Deployment
+            -- Take the contract from the file and deploy it, returning the address.
+            newContractAddress <- deployFromFile (transform defaultCaps) "test/Models/BallotNoConstructor.sol"
+            print newContractAddress
+        ]
     ]
 

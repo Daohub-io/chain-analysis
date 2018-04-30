@@ -246,7 +246,7 @@ replaceCodeCopy' lastByte acc (REVERT:JUMPDEST:(PUSH1 lengthbs):DUP1:(PUSH2 star
         newAcc = (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc)
 
 replaceCodeCopy' lastByte acc (c:cs) = replaceCodeCopy' lastByte (c:acc) cs
-replaceCodeCopy' _ acc [] = error "no init code"
+replaceCodeCopy' _ acc [] = error "no recognised init code"
 
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of
