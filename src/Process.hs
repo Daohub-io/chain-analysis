@@ -32,8 +32,16 @@ defaultCaps = Capabilities
     { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
     }
 
+-- |Transform the opcodes by applying protections that satisfy the
+-- @Capabilities@.
 transform :: Capabilities -> [OpCode] -> [OpCode]
 transform caps opCodes = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections caps $ countCodes opCodes
+
+-- |Transform the opcodes by applying protections that satisfy the
+-- @Capabilities@, ignoring the need for init code.
+transformDeployed :: Capabilities -> [OpCode] -> [OpCode]
+transformDeployed caps opCodes = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections caps $ countCodes opCodes
+
 
 midTransform caps opCodes = (\(a,b,c)->(a,b,countVarOpCodes c)) $ appendJumpTable $ replaceJumps $ insertProtections caps $ countCodes opCodes
 type CountedOpCode = (OpCode, Maybe Integer)
@@ -188,6 +196,8 @@ data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 --
 -- TODO: should use the structured code parser
 --
+-- TODO: currently this is optional but it should be enforced.
+--
 -- CODECOPY takes a length and a
 -- byte offset from which to start copying code into memory. In order for a
 -- contract to be created, bytecode is sent in a transaction. This bytecode is
@@ -213,6 +223,8 @@ data PushVarVal = JumpTableDest256 | JDispatch256 deriving (Eq, Show)
 --        2. code_start_offset: The bytecode offset to start copying code from
 --        3. code_length: The length of code in bytes to be copied.
 -- @
+--
+-- This only replaces the first instance in the code.
 
 replaceCodeCopy :: [OpCode] -> [OpCode]
 replaceCodeCopy code = replaceCodeCopy' lastByte [] code
@@ -220,19 +232,21 @@ replaceCodeCopy code = replaceCodeCopy' lastByte [] code
         lastByte = sum $ map nBytes code
 
 replaceCodeCopy' lastByte acc (REVERT:JUMPDEST:(PUSH2 lengthbs):DUP1:(PUSH2 startbs):(PUSH1 memstartbs1):CODECOPY:(PUSH1 memstartbs2):RETURN:cs)
-    = replaceCodeCopy' lastByte (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc) cs
+    = (reverse newAcc) ++ cs
     where
         length = (fromIntegral lastByte) - (fromIntegral $ evm256ToInteger startbs)
         start = startbs
+        newAcc = (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc)
 
 replaceCodeCopy' lastByte acc (REVERT:JUMPDEST:(PUSH1 lengthbs):DUP1:(PUSH2 startbs):(PUSH1 memstartbs1):CODECOPY:(PUSH1 memstartbs2):RETURN:cs)
-    = replaceCodeCopy' lastByte (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc) cs
+    = (reverse newAcc) ++ cs
     where
         length = (fromIntegral (lastByte)) - (fromIntegral $ evm256ToInteger startbs)
         start = integerToEVM256 ((evm256ToInteger startbs) + 1)
+        newAcc = (RETURN:(PUSH1 memstartbs2):CODECOPY:(PUSH1 memstartbs1):(PUSH2 start):DUP1:(PUSH2 (integerToEVM256 length)):JUMPDEST:REVERT:acc)
 
 replaceCodeCopy' lastByte acc (c:cs) = replaceCodeCopy' lastByte (c:acc) cs
-replaceCodeCopy' _ acc [] = reverse acc
+replaceCodeCopy' _ acc [] = error "no init code"
 
 replaceJumps :: [CountedOpCode] -> [VarOpCode]
 replaceJumps codes = (codes >>= (\ccode -> case ccode of

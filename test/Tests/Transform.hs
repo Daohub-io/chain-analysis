@@ -74,7 +74,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
     [ TestLabel "Storage Protection" $ TestList $
         [ TestLabel "Should Leave Code w/o Jumps or JumpDests Unchanged" $ TestCase $ do
             let code = [STOP, STOP, STOP]
-            assertEqual "Code should remain unchanged" code (transform defaultCaps code)
+            assertEqual "Code should remain unchanged" code (transformDeployed defaultCaps code)
         , TestLabel "Should Add a table for a single jump (no stores)" $ TestCase $ do
             let code =
                     [ PUSH1 (pack [0x4])
@@ -95,8 +95,8 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                 defaultCaps = Capabilities
                     { caps_storageRange  = (0x0100000000000000000000000000000000000000000000000000000000000000,0x0200000000000000000000000000000000000000000000000000000000000000)
                     }
-                tableWithProtectedStores = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes code
-                tableWithoutProtectedStores = replaceCodeCopy $ replaceVars $ appendJumpTable $ replaceJumps $ countCodes code
+                tableWithProtectedStores = replaceVars $ appendJumpTable $ replaceJumps $ insertProtections defaultCaps $ countCodes code
+                tableWithoutProtectedStores = replaceVars $ appendJumpTable $ replaceJumps $ countCodes code
             assertEqual "The added jump table should be the same whether storage protection is run or not" tableWithoutProtectedStores tableWithProtectedStores
         , TestLabel "Should add a table for a single jump (no stores)" $ TestCase $ do
             let code =
@@ -105,7 +105,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , STOP
                     , JUMPDEST
                     ]
-            case extractJumpTable $ transform defaultCaps code of
+            case extractJumpTable $ transformDeployed defaultCaps code of
                 Just entries -> do
                     assertEqual "The jump table should have a single entry" 1 (length entries)
                     let [(original, remapping)] = entries
@@ -117,7 +117,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , PUSH1 (pack [0x4])
                     , SSTORE
                     ]
-                transformed = transform defaultCaps code
+                transformed = transformDeployed defaultCaps code
             case extractJumpTable transformed of
                 Just entries -> assertFailure "A jump table should not be present"
                 Nothing -> pure ()
@@ -137,7 +137,7 @@ preprocessorTests = TestLabel "Preprocessor" $ TestList $
                     , PUSH1 (pack [0x4])
                     , POP
                     ]
-                transformed = transform defaultCaps code
+                transformed = transformDeployed defaultCaps code
             case extractJumpTable transformed of
                 Just entries -> do
                     assertEqual "The jump table should have a single entry" 1 (length entries)
