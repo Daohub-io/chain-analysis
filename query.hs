@@ -1,0 +1,255 @@
+{-# LANGUAGE OverloadedStrings #-}
+import Network.Ethereum.Web3 hiding (runWeb3)
+import Network.Ethereum.Web3.Web3
+import Network.Ethereum.Web3.JsonAbi as JsonAbi
+import Network.Ethereum.Web3.Types
+import Network.Ethereum.Web3.Eth as Eth
+import qualified Network.Ethereum.Web3.Address as Address
+
+import Control.Monad
+
+import Data.Attoparsec.ByteString
+import Data.ByteString (pack)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as C8 (pack, unpack)
+import Data.ByteString.Base16 as B16
+import Data.Either
+import qualified Data.Map.Strict as M
+import Data.Monoid ((<>))
+import Data.List
+import qualified Data.Set as S
+import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Text.Encoding
+import qualified Data.Text.IO as T
+
+import System.Directory
+import System.Environment
+import System.FilePath
+import System.Process
+import System.IO.Temp
+
+import Check.Stores
+import OpCode.Exporter
+import OpCode.Parser
+import OpCode.Type
+import Process
+import OpCode.Utils
+
+import Data.Char (isSpace)
+
+trim :: String -> String
+trim = f . f
+   where f = reverse . dropWhile isSpace
+
+data Lib = Lib
+    { lib_address :: Address
+    , lib_metadata :: LibMetadata
+    } deriving (Eq, Show, Ord)
+
+data LibMetadata
+    = KnownLib String
+    | UnknownLib
+    deriving (Eq, Show, Ord)
+
+getLibMetadataMap :: IO (M.Map Address LibMetadata)
+getLibMetadataMap = do
+    file <- readFile "verified-addresses.txt"
+    let entries = lines file
+    pure $ M.fromList $ map getLibFromEntry entries
+
+getLibFromEntry :: String -> (Address, LibMetadata)
+getLibFromEntry str =
+    let address = (\(Right x)->x) $ Address.fromText $ T.pack $ Data.List.take 40 $ Data.List.drop 2 $ str
+        name = trim $ Data.List.drop 42 $ str
+        metadata = if name == "" then UnknownLib else KnownLib name
+    in (address, metadata)
+
+-- |Invert the map so that we can see how often the libs are referenced.
+invertReferences :: M.Map Address (S.Set Address) -> M.Map Address (S.Set Address)
+invertReferences m = M.foldrWithKey' (\cAddress lAddresses acc -> S.foldr' (\s a -> M.insertWith S.union s (S.singleton cAddress) a) acc lAddresses) M.empty m
+
+runWeb3 :: Web3 a -> IO (Either Web3Error a)
+runWeb3 = runWeb3' (HttpProvider "http://localhost:8545")
+
+main = do
+    (cmd:args) <- getArgs
+    case cmd of
+        "count" -> do
+            contractStore <- read <$> readFile dataFilePath
+            putStrLn $ "Accounts: " ++ show (cds_nAccounts contractStore)
+            putStrLn $ "Contracts: " ++ show (cds_nContracts contractStore)
+        "blocks" -> mainBlocks
+        "get-addresses" -> mainGetAddresses
+        "get-data" -> mainGetData
+        "print-libs" -> do
+            contractStore <- read <$> readFile dataFilePath
+            libNameMap <- getLibMetadataMap
+            let
+                -- |A map of contracts to references they hold to other contracts
+                refMap = buildLibMap contractStore
+                -- |A map of contracts to contracts that reference them
+                libMap = invertReferences refMap
+            printLibs libNameMap libMap
+
+buildLibMap :: ContractDataStore -> M.Map Address (S.Set Address)
+buildLibMap cds@(ContractDataStore {cds_addresses = cds_addresses}) = Data.List.foldr f M.empty cds_addresses
+    where
+        f :: (Address, AddressInfo) -> M.Map Address (S.Set Address) -> M.Map Address (S.Set Address)
+        f (address, addressInfo) acc = case addressInfo of
+            AccountAddress -> acc
+            ContractAddress refs -> M.insert address refs acc
+
+
+-- printLibs :: M.Map Address (S.Set Address) -> IO ()
+printLibs libNameMap = putStrLn . (showLibs libNameMap)
+
+-- showLibs :: M.Map Address (S.Set Address) -> String
+showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a b)) . M.elems . (M.mapWithKey f)
+    where
+        showIt (address, count) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" ++ info address
+        f k v = (k, S.size v)
+        info address = case M.lookup address libNameMap of
+            Just (KnownLib name) -> " (" ++ name ++ ")"
+            _ -> ""
+
+-- TODO: implement transaction logic
+mainBlocks = do
+    print =<< (runWeb3 $ getBlockByNumber "0x0")
+    print =<< (runWeb3 $ getBlockByNumber "0x1")
+    print =<< (runWeb3 $ getBlockByNumber "0x2")
+
+dataFilePath :: FilePath
+dataFilePath = "data.txt"
+
+mainGetData :: IO ()
+mainGetData = do
+    m <- iterateAddresses emptyCDS Nothing 500
+    writeFile dataFilePath (show m)
+
+mainGetAddresses = iterateGetAddresses Nothing 5000
+
+iterateGetAddresses :: Maybe Address -> Int -> IO ()
+iterateGetAddresses offset n = do
+    let del = 50
+    if n > 0
+        -- There are more addreses to be retrieved.
+        then do
+            let numReq = (min del n)
+            -- Ask for some addresses
+            adds <- getAddresses offset numReq
+            case adds of
+                -- There was an error in retrieving thelist of addresses
+                Left e -> error (show e)
+                -- The list of addresses was retrieved
+                Right [] -> pure ()
+                Right x -> do
+                    mapM_ (T.putStrLn . ((<>) "0x") . Address.toText) x
+                    iterateGetAddresses (Just $ last x) (n-(length x))
+        -- We have retrieved the desired number of addresses, end.
+        else pure ()
+
+emptyCDS = ContractDataStore 0 0 []
+
+data ContractDataStore = ContractDataStore
+    { cds_nAccounts :: Int
+    , cds_nContracts :: Int
+    , cds_addresses ::[(Address, AddressInfo)]
+    } deriving (Show, Read, Eq)
+
+data AddressInfo = AccountAddress | ContractAddress (S.Set Address) deriving (Show, Read, Eq)
+
+addAddress :: ContractDataStore -> Address -> AddressInfo -> ContractDataStore
+addAddress cds addr addrInfo = cdsIncd {cds_addresses = ((addr,addrInfo):(cds_addresses cds))}
+    where
+        cdsIncd =  case addrInfo of
+            AccountAddress -> incAccounts cds
+            ContractAddress _ -> incContracts cds
+
+incAccounts :: ContractDataStore -> ContractDataStore
+incAccounts cds = cds {cds_nAccounts = cds_nAccounts cds  + 1}
+
+incContracts :: ContractDataStore -> ContractDataStore
+incContracts cds = cds {cds_nContracts = cds_nContracts cds + 1}
+
+addAddressToStore :: ContractDataStore -> Address -> IO ContractDataStore
+addAddressToStore cds address = do
+    (T.putStr . ((<>) "0x") . Address.toText) address
+    contractCode <- getContract address
+    addrInfo <- case contractCode of
+        (Right (Just code)) -> do
+            let (bytecode, remainder) = B16.decode $ encodeUtf8 $ T.drop 2 code
+            if remainder /= B.empty then error (show remainder) else pure ()
+            case parseOnly (parseOpCodes <* endOfInput) bytecode of
+                Left err -> do
+                    putStrLn $ " - Opcodes could not be parsed in full: " ++ err
+                    pure $ ContractAddress S.empty
+                Right parsed -> do
+                    let addresses = findReferences parsed
+                    putStrLn $ " - Contract (" <>  show  ((T.length code) `div` 2) <> " bytes)"
+                    pure $ ContractAddress addresses
+        (Right Nothing) -> putStrLn " - Account" >> pure AccountAddress
+        e -> error (show e)
+    pure $ addAddress cds address addrInfo
+
+findReferences :: [OpCode] -> S.Set Address
+findReferences parsed =
+    let addresses = map (\(PUSH20 bs) -> Address.fromText $ decodeUtf8 $ B16.encode bs) $ filter isPUSH20 parsed
+    -- putStrLn $ " - Contract (" <>  show  ((T.length code) `div` 2) <> " bytes)" --  <> (unlines $ map (((<>) "  ")  . show) addresses)
+    in case rights addresses of
+        [] -> S.empty
+        xs -> S.fromList xs
+
+
+iterateAddresses :: ContractDataStore -> Maybe Address -> Int -> IO ContractDataStore
+iterateAddresses cds offset n = do
+    let del = 20
+    if n > 0
+        -- There are more addreses to be retrieved.
+        then do
+            let numReq = (min del n)
+            -- Ask for some addresses
+            adds <- getAddresses offset numReq
+            case adds of
+                -- There was an error in retrieving thelist of addresses
+                Left e -> error (show e)
+                -- The list of addresses was retrieved
+                Right x -> do
+                    -- For each of the addresses, retrieve its contract code (if
+                    -- it is a contract) add add its information to the store
+                    cdsNew <- foldM (\cds add-> addAddressToStore cds add) cds x
+                    case x of
+                        -- There were no more addresses, simply return
+                        [] -> pure cds
+                        -- There were addresses, add them
+                        _ -> iterateAddresses cdsNew (Just $ last x) (n-(length x))
+        -- We have retrieved the desired number of addresses, end.
+        else pure cds
+
+printMap :: (Show a, Show b, Traversable t) => M.Map a (t b) -> IO ()
+printMap m = let l = M.toList m
+    in mapM_ (\(k,v)->putStr "Contract: " >> print k >> putStrLn "  References: " >> mapM_ (\x->putStr "    " >> print x) v) l
+
+block = (BlockWithNumber (BlockNumber 1500000))
+
+getContract :: Address -> IO (Either Web3Error (Maybe Text))
+getContract address = runWeb3 $ do
+    code <- Eth.getCode address block
+    pure $ if code == "0x"
+        then Nothing
+        else Just code
+
+-- TODO: write something streaming for this
+getAddresses :: Maybe Address -> Int -> IO (Either Web3Error [Address])
+getAddresses start n = runWeb3 $ do
+        theCall <- Eth.listAccounts n start block
+        pure (theCall)
+
+toGraph m = do
+    putStrLn "digraph g {"
+    let l = M.toList m
+    mapM_ (\(k,v)->mapM_ (\x->putStr "  \"" >> putStr (T.unpack $ Address.toText k) >> putStr "\" -> \"" >> putStrLn (T.unpack (Address.toText x) ++ "\"")) v) l
+    putStrLn "}"
+
+filterAddress :: M.Map Address (S.Set Address) -> Address -> M.Map Address (S.Set Address)
+filterAddress m address = M.filter (S.member address) m

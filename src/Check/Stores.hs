@@ -55,6 +55,9 @@ isProtectedStore codes =
 isPUSH32 (PUSH32 _) = True
 isPUSH32 _ = False
 
+isPUSH20 (PUSH20 _) = True
+isPUSH20 _ = False
+
 isSSTORE :: OpCode -> Bool
 isSSTORE SSTORE = True
 isSSTORE _ = False

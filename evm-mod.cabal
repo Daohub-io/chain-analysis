@@ -95,3 +95,57 @@ test-suite evm-mod-test
       Tests.Analyse,
       Tests.Utils
   default-language: Haskell2010
+
+executable query
+  main-is: query.hs
+  hs-source-dirs: .
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , attoparsec
+    , evm-mod
+    , base16-bytestring
+    , bytestring
+    , containers
+    , directory
+    , filepath
+    , parsec
+    , process
+    , temporary
+    , text
+    , HUnit
+    , QuickCheck
+    , test-framework
+    , test-framework-hunit
+    , test-framework-quickcheck2
+    , web3
+  default-language: Haskell2010
+
+executable scrape
+  main-is: ScrapeContracts.hs
+  hs-source-dirs: .
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , attoparsec
+    , evm-mod
+    , base16-bytestring
+    , bytestring
+    , containers
+    , data-default
+    , directory
+    , filepath
+    , parsec
+    , process
+    , req
+    , scalpel-core
+    , tagsoup
+    , temporary
+    , text
+    , HUnit
+    , QuickCheck
+    , test-framework
+    , test-framework-hunit
+    , test-framework-quickcheck2
+    , web3
+  default-language: Haskell2010
