@@ -147,12 +147,41 @@ mainBlocks = do
 
 printTransactions = do
     transactions <- read <$> readFile "transactions.txt" :: IO [(Address, Address)]
+    contractStore <- read <$> readFile dataFilePath
+    libNameMap <- getLibMetadataMap
+    let
+        -- |A map of contracts to references they hold to other contracts
+        refMap = buildLibMap contractStore
+        -- |A map of contracts to contracts that reference them
+        libMap = invertReferences refMap
+
     let m = foldr f M.empty transactions
-    mapM_ print $ sortBy (\a b -> compare (snd a) (snd b)) $ M.toList m
+    -- Go through each contract lib and add up the number of transactions it is
+    -- associated with. The will result in doubel counting a transaction if it
+    -- is on both ends.
+    let transMap = M.mapWithKey (g m) libMap
+    printLibsWithTrans libNameMap transMap libMap
     where
         printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
         f :: (Address, Address) -> M.Map Address Int -> M.Map Address Int
         f (from,to) m = M.insertWith (+) from 1 $ M.insertWith (+) from 1 m
+        g m libAddress addresses =
+            M.foldr (+) 0 $ M.filterWithKey (\k v -> k `S.member` addresses) m
+
+-- printLibs :: M.Map Address (S.Set Address) -> IO ()
+printLibsWithTrans libNameMap transMap = putStrLn . (showLibsWithTrans libNameMap transMap)
+
+-- showLibs :: M.Map Address (S.Set Address) -> String
+showLibsWithTrans libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,_,a) (_,_,b)->compare a b)) . M.elems . (M.mapWithKey f)
+    where
+        showIt (address, count, transCount) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> " - " <> show transCount <> " transactions" <> info address
+        f k v = (k, S.size v, t)
+            where t = case M.lookup k transMap of
+                        Just x -> x
+                        Nothing -> 0
+        info address = case M.lookup address libNameMap of
+            Just (KnownLib name) -> " (" ++ name ++ ")"
+            _ -> ""
 
 
 -- |Get a transaction between two addresses. Ignore those with no to address
