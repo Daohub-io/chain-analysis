@@ -37,6 +37,7 @@ import OpCode.Type
 import Process
 import OpCode.Utils
 
+import Text.Printf
 import Data.Char (isSpace)
 
 trim :: String -> String
@@ -152,8 +153,9 @@ getFromTo trans = do
 
 getAllTransactionFromBlock :: Integer -> IO [Transaction]
 getAllTransactionFromBlock blocknumber = do
-    putStrLn $ "Block Number: " ++ show blocknumber
-    Right nTrans <- runWeb3 $ (unQuantity <$> getBlockTransactionCountByNumber (T.pack $ show blocknumber) :: Web3 Integer)
+    let bnText = (T.pack $ printf "0x%x" blocknumber)
+    putStrLn $ "Block Number: " ++ show bnText
+    Right nTrans <- runWeb3 $ (unQuantity <$> getBlockTransactionCountByNumber bnText :: Web3 Integer)
     mapM (getTransactionFromBlock blocknumber) [0..(nTrans-1)]
     where
         getTransactionFromBlock blocknumber n =  do
