@@ -141,9 +141,13 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
             _ -> ""
 
 mainBlocks = do
-    mapM_ (\n->mapM_ printFromTo =<< getSimpleTransactions n) [1494023..1500000]
+    transactions <- concat <$> mapM getSimpleTransactions [1494023..1500000]
+    let m = foldr f M.empty transactions
+    mapM_ print $ sort $ M.toList m
     where
         printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
+        f (from,to) m = M.insertWith (+) from 1 $ M.insertWith (+) from 1 m
+
 
 -- |Get a transaction between two addresses. Ignore those with no to address
 getFromTo :: Transaction -> Maybe (Address, Address)
