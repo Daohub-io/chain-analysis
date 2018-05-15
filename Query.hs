@@ -81,10 +81,11 @@ main = do
             contractStore <- read <$> readFile dataFilePath
             putStrLn $ "Accounts: " ++ show (cds_nAccounts contractStore)
             putStrLn $ "Contracts: " ++ show (cds_nContracts contractStore)
-        "blocks" -> mainBlocks
+        "get-transactions" -> mainBlocks
+        "print-transactions" -> printTransactions
         "get-addresses" -> mainGetAddresses
         "get-data" -> mainGetData
-        "get-transactions" -> mainGetTransactions
+        -- "get-transactions" -> mainGetTransactions
         "print-libs" -> do
             -- Get all the known contracts and accounts.
             contractStore <- read <$> readFile dataFilePath
@@ -96,24 +97,24 @@ main = do
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
 
-mainGetTransactions = do
-    -- Get all the known contracts and accounts.
-    contractStore <- read <$> readFile dataFilePath
-    let
-        -- |A map of contracts to references they hold to other contracts
-        refMap = buildLibMap contractStore
-        -- |A map of contracts to contracts that reference them
-        libMap = invertReferences refMap
-        -- targetLib is a wallet library of intereset
-        Right targetLib = Address.fromText "0x273930d21e01ee25e4c219b63259d214872220a2"
-        -- Get the set of all contracts which reference it
-        Just contractsOfInterest = M.lookup targetLib libMap
-    -- Print these contracts
-    mapM_ printTransactions $ S.toList contractsOfInterest
-    where
-        printTransactions address = do
-            nTransactionsFrom <- getNTransactionsFrom address
-            T.putStrLn $ ("0x" <> Address.toText address) <> " - " <> (T.pack $ show nTransactionsFrom)
+-- mainGetTransactions = do
+--     -- Get all the known contracts and accounts.
+--     contractStore <- read <$> readFile dataFilePath
+--     let
+--         -- |A map of contracts to references they hold to other contracts
+--         refMap = buildLibMap contractStore
+--         -- |A map of contracts to contracts that reference them
+--         libMap = invertReferences refMap
+--         -- targetLib is a wallet library of intereset
+--         Right targetLib = Address.fromText "0x273930d21e01ee25e4c219b63259d214872220a2"
+--         -- Get the set of all contracts which reference it
+--         Just contractsOfInterest = M.lookup targetLib libMap
+--     -- Print these contracts
+--     mapM_ printTransactions $ S.toList contractsOfInterest
+--     where
+--         printTransactions address = do
+--             nTransactionsFrom <- getNTransactionsFrom address
+--             T.putStrLn $ ("0x" <> Address.toText address) <> " - " <> (T.pack $ show nTransactionsFrom)
 
 getNTransactionsFrom :: Address -> IO (Either Web3Error Integer)
 getNTransactionsFrom address = runWeb3 $ do
@@ -142,10 +143,15 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
 
 mainBlocks = do
     transactions <- concat <$> mapM getSimpleTransactions [1494023..1500000]
+    writeFile "transactions.txt" (show transactions)
+
+printTransactions = do
+    transactions <- read <$> readFile "transactions.txt" :: IO [(Address, Address)]
     let m = foldr f M.empty transactions
-    mapM_ print $ sort $ M.toList m
+    mapM_ print $ sortBy (\a b -> compare (snd a) (snd b)) $ M.toList m
     where
         printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
+        f :: (Address, Address) -> M.Map Address Int -> M.Map Address Int
         f (from,to) m = M.insertWith (+) from 1 $ M.insertWith (+) from 1 m
 
 
