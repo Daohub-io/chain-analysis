@@ -142,7 +142,7 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
             _ -> ""
 
 mainBlocks = do
-    transactions <- concat <$> mapM getSimpleTransactions [1494023..1500000]
+    transactions <- concat <$> mapM getSimpleTransactions [1310324..1500000]
     writeFile "transactions.txt" (show transactions)
 
 printTransactions = do
@@ -157,16 +157,17 @@ printTransactions = do
 
     let m = foldr f M.empty transactions
     -- Go through each contract lib and add up the number of transactions it is
-    -- associated with. The will result in doubel counting a transaction if it
+    -- associated with. The will result in double counting a transaction if it
     -- is on both ends.
     let transMap = M.mapWithKey (g m) libMap
+    mapM_ id $ M.mapWithKey (\k v -> putStrLn $ show k ++ " - " ++ show v) transMap
     printLibsWithTrans libNameMap transMap libMap
     where
         printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
         f :: (Address, Address) -> M.Map Address Int -> M.Map Address Int
         f (from,to) m = M.insertWith (+) from 1 $ M.insertWith (+) from 1 m
         g m libAddress addresses =
-            M.foldr (+) 0 $ M.filterWithKey (\k v -> k `S.member` addresses) m
+            M.foldr (+) 0 $ m `M.restrictKeys` addresses
 
 -- printLibs :: M.Map Address (S.Set Address) -> IO ()
 printLibsWithTrans libNameMap transMap = putStrLn . (showLibsWithTrans libNameMap transMap)
