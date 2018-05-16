@@ -159,7 +159,7 @@ printTransactions = do
     -- Go through each contract lib and add up the number of transactions it is
     -- associated with. The will result in double counting a transaction if it
     -- is on both ends.
-    mapM_ (\(k,v) -> T.putStrLn ("0x" <> Address.toText k <> " - " <>  (T.pack $ show v)))
+    mapM_ (\(k,v) -> T.putStrLn ("0x" <> Address.toText k <> " - " <>  (T.pack $ show v) <> " references: " <> (T.pack $ show $ M.lookup k refMap)))
         $ sortBy (\(_,a) (_,b)-> compare a b) $ M.toList m
     let transMap = M.mapWithKey (g m) libMap
     mapM_ id $ M.mapWithKey (\k v -> putStrLn $ show k ++ " - " ++ show v) transMap
