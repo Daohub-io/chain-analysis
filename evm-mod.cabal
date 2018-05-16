@@ -106,6 +106,7 @@ executable query
     , evm-mod
     , base16-bytestring
     , bytestring
+    , cassava
     , containers
     , directory
     , filepath
@@ -113,6 +114,7 @@ executable query
     , process
     , temporary
     , text
+    , vector
     , HUnit
     , QuickCheck
     , test-framework

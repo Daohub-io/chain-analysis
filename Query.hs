@@ -11,8 +11,10 @@ import Control.Monad
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as C8 (pack, unpack)
 import Data.ByteString.Base16 as B16
+import qualified Data.Csv as CSV
 import Data.Either
 import Data.Maybe
 import qualified Data.Map.Strict as M
@@ -23,6 +25,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Text.IO as T
+import qualified Data.Vector as V
 
 import System.Directory
 import System.Environment
@@ -81,7 +84,7 @@ main = do
             contractStore <- read <$> readFile dataFilePath
             putStrLn $ "Accounts: " ++ show (cds_nAccounts contractStore)
             putStrLn $ "Contracts: " ++ show (cds_nContracts contractStore)
-        "get-transactions" -> mainBlocks
+        "get-transactions" -> getTransactions
         "print-transactions" -> printTransactions
         "get-addresses" -> mainGetAddresses
         "get-data" -> mainGetData
@@ -176,12 +179,78 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
             Just (KnownLib name) -> " (" ++ name ++ ")"
             _ -> ""
 
-mainBlocks = do
-    transactions <- concat <$> mapM getSimpleTransactions [1000000..1500000]
-    writeFile "transactions.txt" (show transactions)
+getTransactions = do
+    transactions <- concat <$> mapM getAllTransactionFromBlock [1500000..1500003]
+    BL.writeFile "transactions.csv" (CSV.encodeDefaultOrderedByName transactions)
+
+instance CSV.FromNamedRecord Transaction
+instance CSV.ToNamedRecord Transaction
+instance CSV.DefaultOrdered Transaction where
+    headerOrder _ = CSV.header
+        [ "txBlockNumber"
+        , "txTransactionIndex"
+        , "txFrom"
+        , "txTo"
+        , "txHash"
+        , "txNonce"
+        , "txBlockHash"
+        , "txValue"
+        , "txGasPrice"
+        , "txGas"
+        , "txInput"
+        ]
+
+instance CSV.FromRecord Transaction where
+    parseRecord v
+        | length v == 11 = Transaction
+            <$> v CSV..! 0
+            <*> v CSV..! 1
+            <*> v CSV..! 2
+            <*> v CSV..! 3
+            <*> v CSV..! 4
+            <*> v CSV..! 5
+            <*> v CSV..! 6
+            <*> v CSV..! 7
+            <*> v CSV..! 8
+            <*> v CSV..! 9
+            <*> v CSV..! 10
+        | otherwise     = mzero
+
+instance CSV.ToRecord Transaction where
+    toRecord trans = CSV.record
+        [ CSV.toField $ txHash trans
+        , CSV.toField $ txNonce trans
+        , CSV.toField $ txBlockHash trans
+        , CSV.toField $ txBlockNumber trans
+        , CSV.toField $ txTransactionIndex trans
+        , CSV.toField $ txFrom trans
+        , CSV.toField $ txTo trans
+        , CSV.toField $ txValue trans
+        , CSV.toField $ txGasPrice trans
+        , CSV.toField $ txGas trans
+        , CSV.toField $ txInput trans
+        ]
+
+instance CSV.FromField Address where
+    parseField s = case Address.fromText $ decodeUtf8 s of
+        Left _ -> mzero
+        Right x -> pure x
+
+instance CSV.ToField Address where
+    toField address = encodeUtf8 $ "0x" <> Address.toText address
+
+instance CSV.FromField BlockNumber where
+    parseField s = BlockNumber <$> CSV.parseField s
+
+instance CSV.ToField BlockNumber where
+    toField (BlockNumber n) = CSV.toField n
 
 printTransactions = do
-    transactions <- read <$> readFile "transactions.txt" :: IO [(Address, Address)]
+    readIn <- CSV.decodeByName <$> BL.readFile "transactions.csv"
+    let transactions = case readIn of
+            Left e -> error $ show e
+            Right (h, x) -> V.toList x :: [Transaction]
+
     contractStore <- read <$> readFile dataFilePath
     libNameMap <- getLibMetadataMap
     let
@@ -190,7 +259,7 @@ printTransactions = do
         -- |A map of contracts to contracts that reference them
         libMap = invertReferences refMap
 
-    let m = foldr f M.empty transactions
+    let m = getTransactionNumbers transactions
     -- Go through each contract lib and add up the number of transactions it is
     -- associated with. The will result in double counting a transaction if it
     -- is on both ends.
@@ -201,11 +270,18 @@ printTransactions = do
     printLibsWithTrans libNameMap transMap libMap
     where
         printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
-        f :: (Address, Address) -> M.Map Address Int -> M.Map Address Int
-        f (from,to) m = M.insertWith (+) from 1 $ M.insertWith (+) from 1 m
         g m libAddress addresses =
             M.foldr (+) 0 $ m `M.restrictKeys` addresses
 
+getTransactionNumbers transactions = foldr f M.empty transactions
+    where
+        f :: Transaction -> M.Map Address Int -> M.Map Address Int
+        f trans m = M.insertWith (+) from 1 $ case toMaybe of
+            Just to -> M.insertWith (+) to 1 m
+            Nothing -> m
+            where
+                from = txFrom trans
+                toMaybe = txTo trans
 -- printLibs :: M.Map Address (S.Set Address) -> IO ()
 printLibsWithTrans libNameMap transMap = putStrLn . (showLibsWithTrans libNameMap transMap)
 
@@ -247,8 +323,6 @@ getSimpleTransactions :: Integer -> IO [(Address, Address)]
 getSimpleTransactions blocknumber =
     -- Discards all transactions without a to adddress
     mapMaybe (getFromTo) <$> getAllTransactionFromBlock blocknumber
-
-
 
 dataFilePath :: FilePath
 dataFilePath = "data.txt"
