@@ -86,6 +86,7 @@ main = do
         "get-addresses" -> mainGetAddresses
         "get-data" -> mainGetData
         -- "get-transactions" -> mainGetTransactions
+        "print-contracts" -> printContractsMain
         "print-libs" -> do
             -- Get all the known contracts and accounts.
             contractStore <- read <$> readFile dataFilePath
@@ -96,6 +97,40 @@ main = do
                 -- |A map of contracts to contracts that reference them
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
+
+printContractsMain = do
+    transactions <- read <$> readFile "transactions.txt" :: IO [(Address, Address)]
+    -- Get all the known contracts and accounts.
+    contractStore <- read <$> readFile dataFilePath
+    libNameMap <- getLibMetadataMap
+    let
+        -- |A map of contracts to references they hold to other contracts
+        refMap = buildLibMap contractStore
+        -- |A map of contracts to contracts that reference them
+        libMap = invertReferences refMap
+        m = foldr f M.empty transactions :: M.Map Address Int
+        transMap = M.mapWithKey (g m) libMap
+    printContracts libNameMap m libMap
+    where
+        printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
+        f :: (Address, Address) -> M.Map Address Int -> M.Map Address Int
+        f (from,to) m = M.insertWith (+) from 1 $ M.insertWith (+) from 1 m
+        g m libAddress addresses =
+            M.foldr (+) 0 $ m `M.restrictKeys` addresses
+
+-- printLibs :: M.Map Address (S.Set Address) -> IO ()
+printContracts libNameMap transMap = putStrLn . (showContracts libNameMap transMap)
+
+-- showLibs :: M.Map Address (S.Set Address) -> String
+showContracts libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,a,_) (_,b,_)->compare a b)) . M.elems . (M.mapWithKey f)
+    where
+        showIt (address, count, refs) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> info address
+            <> "\n" <> unlines (map (\x->"  " <> (T.unpack $ Address.toText x) <> " - " <> (show $ M.lookup x transMap)) $ S.toList refs)
+        f k v = (k, S.size v, v)
+        info address = case M.lookup address libNameMap of
+            Just (KnownLib name) -> " (" ++ name ++ ")"
+            _ -> ""
+
 
 -- mainGetTransactions = do
 --     -- Get all the known contracts and accounts.
