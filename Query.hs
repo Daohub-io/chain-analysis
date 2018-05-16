@@ -125,7 +125,7 @@ printContracts libNameMap transMap = putStrLn . (showContracts libNameMap transM
 showContracts libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,a,_) (_,b,_)->compare a b)) . M.elems . (M.mapWithKey f)
     where
         showIt (address, count, refs) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> info address
-            <> "\n" <> unlines (map (\x->"  " <> (T.unpack $ Address.toText x) <> " - " <> (show $ M.lookup x transMap)) $ S.toList refs)
+            <> "\n" <> unlines (map (\x->"  0x" <> (T.unpack $ Address.toText x) <> " - " <> (show $ M.lookup x transMap)) $ S.toList refs)
         f k v = (k, S.size v, v)
         info address = case M.lookup address libNameMap of
             Just (KnownLib name) -> " (" ++ name ++ ")"
@@ -177,7 +177,7 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
             _ -> ""
 
 mainBlocks = do
-    transactions <- concat <$> mapM getSimpleTransactions [1310324..1500000]
+    transactions <- concat <$> mapM getSimpleTransactions [1000000..1500000]
     writeFile "transactions.txt" (show transactions)
 
 printTransactions = do
