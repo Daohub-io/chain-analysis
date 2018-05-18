@@ -186,6 +186,7 @@ processBlock' (startTime, endTime, refMap, transactionMap) blocknumberInt = do
     let thisBlockTime = posixSecondsToUTCTime $ fromInteger $ read $ T.unpack $ blockTimestamp block
     putStrLn $ " - " ++ (show $ thisBlockTime)
     let newTransactionMap = getTransactionNumbers transactionMap $ blockTransactions block
+    putStrLn $ "  Transaction map size: " ++ (show $ M.size newTransactionMap)
     newRefMap <- buildRefMap (BlockWithNumber blocknumber) refMap $ addressesFromBlock block
     let newEndTime = case endTime of
             Just s -> Just s
@@ -428,13 +429,18 @@ buildRefMap block cachedMap addresses = do
 addAddressesToRefMap :: DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
 addAddressesToRefMap block cachedMap addresses = do
     let unknownAddresses = filter (\x-> not $ x `M.member` cachedMap) addresses
-    print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
-    (Right codes) <- getContracts block unknownAddresses
-    newRefMap <- foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
-    if length unknownAddresses > 0
-        then writeFile dataFilePath (show newRefMap)
-        else pure ()
-    pure newRefMap
+    if length unknownAddresses == 0
+        then do
+            putStrLn "  All addresses known"
+            pure cachedMap
+        else do
+            print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
+            (Right codes) <- getContracts block unknownAddresses
+            newRefMap <- foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
+            if length unknownAddresses > 0
+                then writeFile dataFilePath (show newRefMap)
+                else pure ()
+            pure newRefMap
 
 addAddressToRefMap :: M.Map Address AddressInfo -> (Address, Maybe Text) -> IO (M.Map Address AddressInfo)
 addAddressToRefMap refMap (address, contractCode) = do
