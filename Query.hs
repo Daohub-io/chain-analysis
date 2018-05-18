@@ -8,6 +8,7 @@ import qualified Network.Ethereum.Web3.Address as Address
 
 import Control.Monad
 
+import qualified Data.Aeson as Aeson
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
 import qualified Data.ByteString as B
@@ -21,6 +22,7 @@ import qualified Data.Map.Strict as M
 import Data.Monoid ((<>))
 import Data.List
 import qualified Data.Set as S
+import Data.Time.Clock.POSIX
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding
@@ -74,12 +76,18 @@ getLibFromEntry str =
 invertReferences :: M.Map Address (S.Set Address) -> M.Map Address (S.Set Address)
 invertReferences m = M.foldrWithKey' (\cAddress lAddresses acc -> S.foldr' (\s a -> M.insertWith S.union s (S.singleton cAddress) a) acc lAddresses) M.empty m
 
+-- runWeb3 :: Web3 a -> IO (Either Web3Error a)
+-- runWeb3 = runWeb3' (HttpProvider "http://localhost:8545")
 runWeb3 :: Web3 a -> IO (Either Web3Error a)
-runWeb3 = runWeb3' (HttpProvider "http://localhost:8545")
+runWeb3 = runWeb3' (HttpProvider "https://mainnet.infura.io/8cIXez93NfaTTAqSBhTt:8545")
 
 main = do
     (cmd:args) <- getArgs
     case cmd of
+        "test" -> print =<< (runWeb3 $ (batchCall
+            [ getCodeReq ((\(Right x)->x) $ Address.fromText "0xCFacF40619e4728d4E55809f4a733211796DD9bC") (BlockWithNumber (BlockNumber 5631692))
+            , getCodeReq ((\(Right x)->x) $ Address.fromText "0xCFacF40619e4728d4E55809f4a733211796DD9bC") (BlockWithNumber (BlockNumber 5631692))
+            ] :: Web3 [Text]))
         "count" -> do
             contractStore <- read <$> readFile dataFilePath
             putStrLn $ "Accounts: " ++ show (cds_nAccounts contractStore)
@@ -100,6 +108,92 @@ main = do
                 -- |A map of contracts to contracts that reference them
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
+        "print-libs-end" -> do
+            -- Find all the available block files in the block directory
+            createDirectoryIfMissing True blockDir
+            let endBlockNumber = 5625376
+                -- Number of blocks to process
+                n = 50000
+
+
+            -- A map of addresses to known contract names
+            libNameMap <- getLibMetadataMap
+
+            -- Create a reference map, a map from a contract address to any
+            -- addresses it references.
+            -- |A map of contracts to references they hold to other contracts
+            cacheExits <- doesFileExist dataFilePath
+            cachedMap <- if cacheExits
+                then read <$> readFile dataFilePath
+                else pure M.empty
+            (Just startTime, Just endTime, contractStore, transactionMap) <- foldM processBlock (Nothing, Nothing, cachedMap, M.empty) [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
+            writeFile dataFilePath (show contractStore)
+            let refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract contractStore
+                -- |A map of contracts to contracts that reference them
+            let libMap = invertReferences refMap
+                -- Find the number of transactions for each lib. Go through each
+                -- contract lib and add up the number of transactions it is
+                -- associated with. The will result in double counting a
+                -- transaction if it is on both ends.
+                libTransMap = M.map (g transactionMap) libMap
+            -- mapM_ (\(k,v) -> T.putStrLn ("0x" <> Address.toText k <> " - " <>  (T.pack $ show v) <> " references: " <> (T.pack $ show $ M.lookup k refMap)))
+            --     $ sortBy (\(_,a) (_,b)-> compare a b) $ M.toList m
+            -- let transMap = M.mapWithKey (g m) libMap
+            -- mapM_ id $ M.mapWithKey (\k v -> putStrLn $ show k ++ " - " ++ show v) transMap
+            printLibsWithTrans libNameMap libTransMap libMap
+            putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
+            where
+                printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
+                g transMap addresses =
+                    M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
+
+
+blockDir = joinPath ["data-query", "blocks"]
+
+processBlock (startTime, endTime, refMap, transactionMap) blocknumberInt = do
+    putStr $ "Processing block: #" ++ show blocknumberInt
+    let blocknumber = BlockNumber blocknumberInt
+        filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
+    -- First, check if the data is already on disk
+    alreadyExists <- doesFileExist filePath
+    block <- if alreadyExists
+        -- File exists already, so use that
+        then do
+            readIn <- Aeson.eitherDecode <$> BL.readFile filePath
+            let block = case readIn of
+                    Left e -> error $ show e
+                    Right x -> x
+            putStr $ ("  " ++ (show $ Network.Ethereum.Web3.Types.blockNumber block)) ++ " from cache"
+            pure block
+        -- File does not exist and the block has to be retrieved
+        else do
+            let bnText = (T.pack $ printf "0x%x" blocknumberInt)
+            blockR <- runWeb3 $ Eth.getBlockByNumber bnText
+            case blockR of
+                Left e -> error $ show e
+                Right block -> do
+                    BL.writeFile filePath $ Aeson.encode block
+                    putStr $ ("  " ++ (show $ Network.Ethereum.Web3.Types.blockNumber block)) ++ " from Infura"
+                    pure block
+    let thisBlockTime = posixSecondsToUTCTime $ fromInteger $ read $ T.unpack $ blockTimestamp block
+    putStrLn $ " - " ++ (show $ thisBlockTime)
+    let newTransactionMap = getTransactionNumbers transactionMap $ blockTransactions block
+    newRefMap <- buildRefMap (BlockWithNumber blocknumber) refMap $ addressesFromBlock block
+    let newEndTime = case endTime of
+            Just s -> Just s
+            Nothing -> Just thisBlockTime
+    pure (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap)
+
+addressesFromBlock :: Block -> [Address]
+addressesFromBlock block =
+    let transactions = blockTransactions block
+    in concat $ map addressesFromTransaction transactions
+    where
+
+addressesFromTransaction :: Transaction -> [Address]
+addressesFromTransaction trans = case txTo trans of
+    Nothing -> [txFrom trans]
+    Just to -> [txFrom trans, to]
 
 printContractsMain = do
     transactions <- read <$> readFile "transactions.txt" :: IO [(Address, Address)]
@@ -133,26 +227,6 @@ showContracts libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,a,_) (
         info address = case M.lookup address libNameMap of
             Just (KnownLib name) -> " (" ++ name ++ ")"
             _ -> ""
-
-
--- mainGetTransactions = do
---     -- Get all the known contracts and accounts.
---     contractStore <- read <$> readFile dataFilePath
---     let
---         -- |A map of contracts to references they hold to other contracts
---         refMap = buildLibMap contractStore
---         -- |A map of contracts to contracts that reference them
---         libMap = invertReferences refMap
---         -- targetLib is a wallet library of intereset
---         Right targetLib = Address.fromText "0x273930d21e01ee25e4c219b63259d214872220a2"
---         -- Get the set of all contracts which reference it
---         Just contractsOfInterest = M.lookup targetLib libMap
---     -- Print these contracts
---     mapM_ printTransactions $ S.toList contractsOfInterest
---     where
---         printTransactions address = do
---             nTransactionsFrom <- getNTransactionsFrom address
---             T.putStrLn $ ("0x" <> Address.toText address) <> " - " <> (T.pack $ show nTransactionsFrom)
 
 getNTransactionsFrom :: Address -> IO (Either Web3Error Integer)
 getNTransactionsFrom address = runWeb3 $ do
@@ -259,7 +333,7 @@ printTransactions = do
         -- |A map of contracts to contracts that reference them
         libMap = invertReferences refMap
 
-    let m = getTransactionNumbers transactions
+    let m = getTransactionNumbers M.empty transactions
     -- Go through each contract lib and add up the number of transactions it is
     -- associated with. The will result in double counting a transaction if it
     -- is on both ends.
@@ -273,7 +347,7 @@ printTransactions = do
         g m libAddress addresses =
             M.foldr (+) 0 $ m `M.restrictKeys` addresses
 
-getTransactionNumbers transactions = foldr f M.empty transactions
+getTransactionNumbers m transactions = foldr f m transactions
     where
         f :: Transaction -> M.Map Address Int -> M.Map Address Int
         f trans m = M.insertWith (+) from 1 $ case toMaybe of
@@ -334,6 +408,42 @@ mainGetData = do
 
 mainGetAddresses = iterateGetAddresses Nothing 5000
 
+foldM' :: (Monad m) => (a -> b -> m a) -> a -> [b] -> m a
+foldM' _ z [] = return z
+foldM' f z (x:xs) = do
+  z' <- f z x
+  z' `seq` foldM' f z' xs
+
+buildRefMap :: DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
+buildRefMap block cachedMap addresses = do
+    addAddressesToRefMap block cachedMap addresses
+
+addAddressesToRefMap :: DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
+addAddressesToRefMap block cachedMap addresses = do
+    let unknownAddresses = filter (\x-> not $ x `M.member` cachedMap) addresses
+    print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
+    (Right codes) <- getContracts block unknownAddresses
+    foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
+
+addAddressToRefMap :: M.Map Address AddressInfo -> (Address, Maybe Text) -> IO (M.Map Address AddressInfo)
+addAddressToRefMap refMap (address, contractCode) = do
+    T.putStr $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address)
+    case contractCode of
+        Just code -> do
+            let (bytecode, remainder) = B16.decode $ encodeUtf8 $ T.drop 2 code
+            if remainder /= B.empty then error (show remainder) else pure ()
+            case parseOnly (parseOpCodes <* endOfInput) bytecode of
+                Left err -> do
+                    putStrLn $ "  - Opcodes could not be parsed in full: " ++ err
+                    pure $ M.insert address (ContractAddress S.empty) refMap
+                Right parsed -> do
+                    let addresses = findReferences parsed
+                    putStrLn $ "  - Contract (" <>  show  ((T.length code) `div` 2) <> " bytes)"
+                    pure $ M.insert address (ContractAddress addresses) refMap
+        Nothing -> do
+            putStrLn " - Account"
+            pure $ M.insert address AccountAddress refMap
+
 iterateGetAddresses :: Maybe Address -> Int -> IO ()
 iterateGetAddresses offset n = do
     let del = 50
@@ -363,6 +473,9 @@ data ContractDataStore = ContractDataStore
     } deriving (Show, Read, Eq)
 
 data AddressInfo = AccountAddress | ContractAddress (S.Set Address) deriving (Show, Read, Eq)
+
+isContract (ContractAddress _) = True
+isContract _ = False
 
 addAddress :: ContractDataStore -> Address -> AddressInfo -> ContractDataStore
 addAddress cds addr addrInfo = cdsIncd {cds_addresses = ((addr,addrInfo):(cds_addresses cds))}
@@ -446,6 +559,15 @@ getContract address = runWeb3 $ do
     pure $ if code == "0x"
         then Nothing
         else Just code
+
+getContracts :: DefaultBlock -> [Address] -> IO (Either Web3Error ([Maybe Text]))
+getContracts block addresses = runWeb3 $ do
+    codes <- batchCall $ map (\add->getCodeReq add block) addresses :: Web3 [Text]
+    pure $ map f codes
+    where
+        f code = if code == "0x"
+            then Nothing
+            else Just code
 
 -- TODO: write something streaming for this
 getAddresses :: Maybe Address -> Int -> IO (Either Web3Error [Address])

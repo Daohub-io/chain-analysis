@@ -2,3 +2,4 @@
 #evm-mod.cabal
 *~
 node_modules
+data-query

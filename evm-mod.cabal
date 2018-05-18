@@ -102,6 +102,7 @@ executable query
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , aeson
     , attoparsec
     , evm-mod
     , base16-bytestring
@@ -114,6 +115,7 @@ executable query
     , process
     , temporary
     , text
+    , time
     , vector
     , HUnit
     , QuickCheck
