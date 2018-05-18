@@ -15,32 +15,32 @@ extra-source-files:
 --   type: git
 --   location: https://github.com/daolab/evm-mod
 
-library
-  hs-source-dirs:
-      src
-  build-depends:
-      base >=4.7 && <5
-      , attoparsec
-      , base16-bytestring
-      , binary
-      , bytestring
-      , containers
-      , cryptonite
-      , memory
-      , parsec
-      , QuickCheck
-  exposed-modules:
-      OpCode.Exporter,
-      OpCode.Parser,
-      OpCode.StructureParser,
-      OpCode.Type,
-      OpCode.Utils,
-      Check.Stores,
-      Check.JumpTable,
-      Process
-  other-modules:
-      Paths_evm_mod
-  default-language: Haskell2010
+-- library
+--   hs-source-dirs:
+--       src
+--   build-depends:
+--       base >=4.7 && <5
+--       , attoparsec
+--       , base16-bytestring
+--       , binary
+--       , bytestring
+--       , containers
+--       , cryptonite
+--       , memory
+--       , parsec
+--       , QuickCheck
+--   exposed-modules:
+--       OpCode.Exporter,
+--       OpCode.Parser,
+--       OpCode.StructureParser,
+--       OpCode.Type,
+--       OpCode.Utils,
+--       Check.Stores,
+--       Check.JumpTable,
+--       Process
+--   other-modules:
+--       Paths_evm_mod
+--   default-language: Haskell2010
 
 executable query
   main-is: Main.hs
@@ -71,31 +71,31 @@ executable query
     , web3
   default-language: Haskell2010
 
-executable scrape
-  main-is: ScrapeContracts.hs
-  hs-source-dirs: src
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , attoparsec
-    , evm-mod
-    , base16-bytestring
-    , bytestring
-    , containers
-    , data-default
-    , directory
-    , filepath
-    , parsec
-    , process
-    , req
-    , scalpel-core
-    , tagsoup
-    , temporary
-    , text
-    , HUnit
-    , QuickCheck
-    , test-framework
-    , test-framework-hunit
-    , test-framework-quickcheck2
-    , web3
-  default-language: Haskell2010
+-- executable scrape
+--   main-is: ScrapeContracts.hs
+--   hs-source-dirs: src
+--   ghc-options: -threaded -rtsopts -with-rtsopts=-N
+--   build-depends:
+--       base >=4.7 && <5
+--     , attoparsec
+--     , evm-mod
+--     , base16-bytestring
+--     , bytestring
+--     , containers
+--     , data-default
+--     , directory
+--     , filepath
+--     , parsec
+--     , process
+--     , req
+--     , scalpel-core
+--     , tagsoup
+--     , temporary
+--     , text
+--     , HUnit
+--     , QuickCheck
+--     , test-framework
+--     , test-framework-hunit
+--     , test-framework-quickcheck2
+--     , web3
+--   default-language: Haskell2010
