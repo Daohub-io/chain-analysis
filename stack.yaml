@@ -10,5 +10,5 @@ extra-deps:
 - git: git@github.com:Daolab/hs-web3.git
   commit: 9ac6b925549e2f8eccb1b7fb86bd1eff001d7c17
 - git: git@github.com:Daolab/beaker-preprocessor.git
-  commit: c9f1eede70da1ffd157ed9b3eef7bff879d4faef
+  commit: 01aac494ec30cc0b55a9172d78debed16576cad6
 resolver: lts-11.1
