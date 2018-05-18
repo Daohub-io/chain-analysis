@@ -7,7 +7,7 @@ import Network.Ethereum.Web3.Eth as Eth
 import qualified Network.Ethereum.Web3.Address as Address
 
 import Control.Monad
-
+import Control.Exception
 import qualified Data.Aeson as Aeson
 import Data.Attoparsec.ByteString
 import Data.ByteString (pack)
@@ -373,7 +373,6 @@ showLibsWithTrans libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,_,
             Just (KnownLib name) -> " (" ++ name ++ ")"
             _ -> ""
 
-
 -- |Get a transaction between two addresses. Ignore those with no to address
 getFromTo :: Transaction -> Maybe (Address, Address)
 getFromTo trans = do
@@ -567,10 +566,15 @@ getContract address = runWeb3 $ do
         else Just code
 
 getContracts :: DefaultBlock -> [Address] -> IO (Either Web3Error ([Maybe Text]))
-getContracts block addresses = runWeb3 $ do
-    codes <- batchCall $ map (\add->getCodeReq add block) addresses :: Web3 [Text]
-    pure $ map f codes
+getContracts block addresses = do
+    codes <- Control.Exception.try $ runWeb3 $ do
+        codes <- batchCall $ map (\add->getCodeReq add block) addresses :: Web3 [Text]
+        pure $ map f codes
+    case codes of
+        Left e -> let y = e :: SomeException in getContracts block addresses
+        Right x -> pure x
     where
+        f :: Text -> Maybe Text
         f code = if code == "0x"
             then Nothing
             else Just code
