@@ -81,17 +81,13 @@ invertReferences m = M.foldrWithKey' (\cAddress lAddresses acc -> S.foldr' (\s a
 runWeb3 :: Web3 a -> IO (Either Web3Error a)
 runWeb3 = runWeb3' (HttpProvider "https://mainnet.infura.io/8cIXez93NfaTTAqSBhTt:8545")
 
+blockDir :: FilePath
+blockDir = joinPath ["data-query", "blocks"]
+
+main :: IO ()
 main = do
     (cmd:args) <- getArgs
     case cmd of
-        "test" -> print =<< (runWeb3 $ (batchCall
-            [ getCodeReq ((\(Right x)->x) $ Address.fromText "0xCFacF40619e4728d4E55809f4a733211796DD9bC") (BlockWithNumber (BlockNumber 5631692))
-            , getCodeReq ((\(Right x)->x) $ Address.fromText "0xCFacF40619e4728d4E55809f4a733211796DD9bC") (BlockWithNumber (BlockNumber 5631692))
-            ] :: Web3 [Text]))
-        "count" -> do
-            contractStore <- read <$> readFile dataFilePath
-            putStrLn $ "Accounts: " ++ show (cds_nAccounts contractStore)
-            putStrLn $ "Contracts: " ++ show (cds_nContracts contractStore)
         "get-transactions" -> getTransactions
         "print-transactions" -> printTransactions
         "get-addresses" -> mainGetAddresses
@@ -111,44 +107,50 @@ main = do
         "print-libs-end" -> do
             -- Find all the available block files in the block directory
             createDirectoryIfMissing True blockDir
+            -- The the latest block number we will process. We will start here
+            -- and walk backwards through the blockchain.
             let endBlockNumber = 5625376
                 -- Number of blocks to process
                 n = 50000
-
-
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
-
             -- Create a reference map, a map from a contract address to any
             -- addresses it references.
-            -- |A map of contracts to references they hold to other contracts
+            -- First check if there is already a data
+            -- file contiaining this information.
             cacheExits <- doesFileExist dataFilePath
+            -- If the cache exists, read it in and use that as a starting point,
+            -- else start with an empy map.
             cachedMap <- if cacheExits
                 then read <$> readFile dataFilePath
                 else pure M.empty
-            (Just startTime, Just endTime, contractStore, transactionMap) <- foldM processBlock (Nothing, Nothing, cachedMap, M.empty) [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
-            writeFile dataFilePath (show contractStore)
-            let refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract contractStore
-                -- |A map of contracts to contracts that reference them
-            let libMap = invertReferences refMap
+            -- Process each of the blocks, starting at the specified end block
+            -- and working backwatds, updating the data structures as we go.
+            (Just startTime, Just endTime, contractStore, transactionMap)
+                <- foldM
+                    processBlock
+                    (Nothing, Nothing, cachedMap, M.empty)
+                    [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
+
+            let
+                -- Filter this map to only list references to other contracts.
+                -- This is now a map of contracts to contracts which they
+                -- reference.
+                refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract contractStore
+                -- Invert that map to create a map of contracts to contracts
+                -- that reference them.
+                libMap = invertReferences refMap
                 -- Find the number of transactions for each lib. Go through each
                 -- contract lib and add up the number of transactions it is
                 -- associated with. The will result in double counting a
                 -- transaction if it is on both ends.
                 libTransMap = M.map (g transactionMap) libMap
-            -- mapM_ (\(k,v) -> T.putStrLn ("0x" <> Address.toText k <> " - " <>  (T.pack $ show v) <> " references: " <> (T.pack $ show $ M.lookup k refMap)))
-            --     $ sortBy (\(_,a) (_,b)-> compare a b) $ M.toList m
-            -- let transMap = M.mapWithKey (g m) libMap
-            -- mapM_ id $ M.mapWithKey (\k v -> putStrLn $ show k ++ " - " ++ show v) transMap
             printLibsWithTrans libNameMap libTransMap libMap
             putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
-
-
-blockDir = joinPath ["data-query", "blocks"]
 
 processBlock (startTime, endTime, refMap, transactionMap) blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt

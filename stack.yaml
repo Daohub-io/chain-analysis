@@ -7,7 +7,8 @@ extra-deps:
 - ghc-typelits-presburger-0.2.0.0
 - sized-0.3.0.0
 - type-natural-0.8.0.0
-- ../hs-web3
-# - git: git@github.com:Daolab/hs-web3.git
-#   commit: 85c555509d9a68ccda78ad67fbca18cd89961cd8
+- git: git@github.com:Daolab/hs-web3.git
+  commit: 9ac6b925549e2f8eccb1b7fb86bd1eff001d7c17
+- git: git@github.com:Daolab/beaker-preprocessor.git
+  commit: c9f1eede70da1ffd157ed9b3eef7bff879d4faef
 resolver: lts-11.1

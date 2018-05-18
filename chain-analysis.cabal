@@ -1,6 +1,6 @@
-name:           evm-mod
+name:           chain-analysis
 version:        0.1.0.0
-description:    EVM bytecode parser and modifier
+description:    Ethereum blockchain analysis
 author:         Daolab
 maintainer:     joshannessy@gmail.com
 license:        BSD3
@@ -42,63 +42,9 @@ library
       Paths_evm_mod
   default-language: Haskell2010
 
-executable evm-mod-exe
-  main-is: Main.hs
-  hs-source-dirs:
-      app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , evm-mod
-    , bytestring
-    , attoparsec
-  other-modules:
-      Paths_evm_mod
-  default-language: Haskell2010
-
-test-suite evm-mod-test
-  type: exitcode-stdio-1.0
-  main-is: Main.hs
-  hs-source-dirs:
-      test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , attoparsec
-    , evm-mod
-    , base16-bytestring
-    , bytestring
-    , containers
-    , directory
-    , filepath
-    , parsec
-    , process
-    , temporary
-    , text
-    , HUnit
-    , QuickCheck
-    , test-framework
-    , test-framework-hunit
-    , test-framework-quickcheck2
-    , web3
-  other-modules:
-      Paths_evm_mod,
-      CompileSolidity,
-      Models.HandWritten,
-      Tests.HandleOpCodes,
-      Tests.Transform,
-      Tests.Transform.AdderOnChainProtected,
-      Tests.Transform.AdderOnChainUnprotected,
-      Tests.Transform.StoreAndGetOnChainProtectedInBounds,
-      Tests.Transform.StoreAndGetOnChainProtectedOutOfBounds,
-      Tests.Transform.StoreAndGetOnChainUnprotectedInBounds,
-      Tests.Analyse,
-      Tests.Utils
-  default-language: Haskell2010
-
 executable query
-  main-is: Query.hs
-  hs-source-dirs: .
+  main-is: Main.hs
+  hs-source-dirs: src
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -127,7 +73,7 @@ executable query
 
 executable scrape
   main-is: ScrapeContracts.hs
-  hs-source-dirs: .
+  hs-source-dirs: src
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
