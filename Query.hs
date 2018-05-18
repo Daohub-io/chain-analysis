@@ -423,7 +423,11 @@ addAddressesToRefMap block cachedMap addresses = do
     let unknownAddresses = filter (\x-> not $ x `M.member` cachedMap) addresses
     print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
     (Right codes) <- getContracts block unknownAddresses
-    foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
+    newRefMap <- foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
+    if length unknownAddresses > 0
+        then writeFile dataFilePath (show newRefMap)
+        else pure ()
+    pure newRefMap
 
 addAddressToRefMap :: M.Map Address AddressInfo -> (Address, Maybe Text) -> IO (M.Map Address AddressInfo)
 addAddressToRefMap refMap (address, contractCode) = do
