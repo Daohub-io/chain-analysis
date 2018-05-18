@@ -152,7 +152,13 @@ main = do
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
 
-processBlock (startTime, endTime, refMap, transactionMap) blocknumberInt = do
+processBlock args bn = do
+    res <- Control.Exception.try $ processBlock' args bn
+    case res of
+        Left e -> let y = e :: SomeException in processBlock' args bn
+        Right x -> pure x
+
+processBlock' (startTime, endTime, refMap, transactionMap) blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt
     let blocknumber = BlockNumber blocknumberInt
         filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
