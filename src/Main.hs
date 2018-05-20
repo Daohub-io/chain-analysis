@@ -119,11 +119,19 @@ main = do
             -- First check if there is already a data
             -- file contiaining this information.
             cacheExits <- doesFileExist dataFilePath
+            oldCacheExits <- doesFileExist oldDataFilePath
             -- If the cache exists, read it in and use that as a starting point,
             -- else start with an empy map.
-            cachedMap <- if cacheExits
-                then read <$> readFile dataFilePath
+            oldCachedMap <- if oldCacheExits
+                then read <$> readFile oldDataFilePath
                 else pure M.empty
+            newCachedMap <- if cacheExits
+                then do
+                    raw <- lines <$> readFile dataFilePath
+                    let entryList = map read raw
+                    pure $ M.fromList entryList
+                else pure M.empty
+            let cachedMap = M.union oldCachedMap newCachedMap
             -- Process each of the blocks, starting at the specified end block
             -- and working backwatds, updating the data structures as we go.
             (Just startTime, Just endTime, contractStore, transactionMap)
@@ -407,7 +415,10 @@ getSimpleTransactions blocknumber =
     mapMaybe (getFromTo) <$> getAllTransactionFromBlock blocknumber
 
 dataFilePath :: FilePath
-dataFilePath = "data.txt"
+dataFilePath = "data-lines.txt"
+
+oldDataFilePath :: FilePath
+oldDataFilePath = "data.txt"
 
 mainGetData :: IO ()
 mainGetData = do
@@ -438,7 +449,8 @@ addAddressesToRefMap block cachedMap addresses = do
             (Right codes) <- getContracts block unknownAddresses
             newRefMap <- foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
             if length unknownAddresses > 0
-                then writeFile dataFilePath (show newRefMap)
+                then do
+                    appendFile dataFilePath $ unlines $ map show $ M.toList newRefMap
                 else pure ()
             pure newRefMap
 
