@@ -447,16 +447,22 @@ addAddressesToRefMap block cachedMap addresses = do
         else do
             print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
             (Right codes) <- getContracts block unknownAddresses
-            newRefMap <- foldM' addAddressToRefMap cachedMap (zip unknownAddresses codes)
+            addressInfos <- mapM getAddressInfo (zip unknownAddresses codes)
+            let pairs = zip unknownAddresses addressInfos
+            newRefMap <- foldM' addAddressToRefMap cachedMap pairs
             if length unknownAddresses > 0
                 then do
-                    appendFile dataFilePath $ unlines $ map show $ M.toList newRefMap
+                    appendFile dataFilePath $ unlines $ map show pairs
                 else pure ()
             pure newRefMap
 
-addAddressToRefMap :: M.Map Address AddressInfo -> (Address, Maybe Text) -> IO (M.Map Address AddressInfo)
-addAddressToRefMap refMap (address, contractCode) = do
+addAddressToRefMap :: M.Map Address AddressInfo -> (Address, AddressInfo) -> IO (M.Map Address AddressInfo)
+addAddressToRefMap refMap (address, addressInfo) = do
     T.putStr $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address)
+    pure $ M.insert address addressInfo refMap
+
+getAddressInfo :: (Address, Maybe Text) -> IO AddressInfo
+getAddressInfo (address, contractCode) = do
     case contractCode of
         Just code -> do
             let (bytecode, remainder) = B16.decode $ encodeUtf8 $ T.drop 2 code
@@ -464,14 +470,14 @@ addAddressToRefMap refMap (address, contractCode) = do
             case parseOnly (parseOpCodes <* endOfInput) bytecode of
                 Left err -> do
                     putStrLn $ "  - Opcodes could not be parsed in full: " ++ err
-                    pure $ M.insert address (ContractAddress S.empty) refMap
+                    pure $ (ContractAddress S.empty)
                 Right parsed -> do
                     let addresses = findReferences parsed
                     putStrLn $ "  - Contract (" <>  show  ((T.length code) `div` 2) <> " bytes)"
-                    pure $ M.insert address (ContractAddress addresses) refMap
+                    pure $ (ContractAddress addresses)
         Nothing -> do
             putStrLn " - Account"
-            pure $ M.insert address AccountAddress refMap
+            pure $ AccountAddress
 
 iterateGetAddresses :: Maybe Address -> Int -> IO ()
 iterateGetAddresses offset n = do
