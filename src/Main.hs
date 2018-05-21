@@ -111,7 +111,7 @@ main = do
             -- and walk backwards through the blockchain.
             let endBlockNumber = 5625376
                 -- Number of blocks to process
-                n = 50000
+                n = 10
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
             -- Create a reference map, a map from a contract address to any
@@ -139,6 +139,9 @@ main = do
                     processBlock
                     (Nothing, Nothing, cachedMap, M.empty)
                     [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
+            knownWallets <- S.fromList
+                <$> map (\(Right x)->x) <$> map Address.fromText
+                <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
 
             let
                 -- Filter this map to only list references to other contracts.
@@ -155,10 +158,20 @@ main = do
                 libTransMap = M.map (g transactionMap) libMap
             printLibsWithTrans libNameMap libTransMap libMap
             putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
+            -- Filter transaction map to show only contracts that reference known wallet libs
+            let knownTrans = M.filterWithKey (\k v->referencesKnownLib knownWallets refMap k) (transactionMap :: M.Map Address Int)
+            mapM_ id $ M.mapWithKey (\address n->T.putStrLn $ "0x" <> Address.toText address <> " - " <> (T.pack $ show n)) knownTrans
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
+                referencesKnownLib :: S.Set Address -> M.Map Address (S.Set Address) -> Address -> Bool
+                referencesKnownLib knownLibs refMap address =
+                    let refs = M.lookup address refMap
+                    in case refs of
+                        Nothing -> False
+                        Just rs -> not $ S.null $ S.intersection knownLibs rs
+
 
 processBlock args bn = do
     res <- Control.Exception.try $ processBlock' args bn
