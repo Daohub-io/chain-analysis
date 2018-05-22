@@ -92,16 +92,29 @@ main = do
         "get-transactions" -> getTransactions
         "print-transactions" -> printTransactions
         "get-addresses" -> mainGetAddresses
-        "get-data" -> mainGetData
+        "get-data" -> do
+            m <- iterateAddresses emptyCDS Nothing 30000
+            writeFile fromStartDataFilePath (show m)
         -- "get-transactions" -> mainGetTransactions
         "print-contracts" -> printContractsMain
         "print-libs" -> do
+            cacheExits <- doesFileExist dataFilePath
+            oldCacheExits <- doesFileExist oldDataFilePath
             -- Get all the known contracts and accounts.
-            contractStore <- read <$> readFile dataFilePath
+            oldCachedMap <- if oldCacheExits
+                then read <$> readFile oldDataFilePath
+                else pure M.empty
+            newCachedMap <- if cacheExits
+                then do
+                    raw <- lines <$> readFile dataFilePath
+                    let entryList = map read raw
+                    pure $ M.fromList entryList
+                else pure M.empty
+            let cachedMap = M.union oldCachedMap newCachedMap
             libNameMap <- getLibMetadataMap
             let
                 -- |A map of contracts to references they hold to other contracts
-                refMap = buildLibMap contractStore
+                refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract cachedMap
                 -- |A map of contracts to contracts that reference them
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
@@ -462,10 +475,8 @@ dataFilePath = "data-lines.txt"
 oldDataFilePath :: FilePath
 oldDataFilePath = "data.txt"
 
-mainGetData :: IO ()
-mainGetData = do
-    m <- iterateAddresses emptyCDS Nothing 30000
-    writeFile dataFilePath (show m)
+fromStartDataFilePath :: FilePath
+fromStartDataFilePath = "from-start-data.txt"
 
 mainGetAddresses = iterateGetAddresses Nothing 5000
 
