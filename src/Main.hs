@@ -23,6 +23,7 @@ import Data.Monoid ((<>))
 import Data.List
 import qualified Data.Set as S
 import Data.Time.Clock.POSIX
+import Data.Time
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding
@@ -105,13 +106,15 @@ main = do
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
         "print-libs-end" -> do
+            let n = case args of
+                    (a:_) -> read a
+                    _ -> 20000
             -- Find all the available block files in the block directory
             createDirectoryIfMissing True blockDir
             -- The the latest block number we will process. We will start here
             -- and walk backwards through the blockchain.
             let endBlockNumber = 5625376
                 -- Number of blocks to process
-                n = 20000
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
             -- Create a reference map, a map from a contract address to any
@@ -132,17 +135,16 @@ main = do
                     pure $ M.fromList entryList
                 else pure M.empty
             let cachedMap = M.union oldCachedMap newCachedMap
-            -- Process each of the blocks, starting at the specified end block
-            -- and working backwatds, updating the data structures as we go.
-            (Just startTime, Just endTime, contractStore, transactionMap)
-                <- foldM
-                    processBlock
-                    (Nothing, Nothing, cachedMap, M.empty)
-                    [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
             knownWallets <- S.fromList
                 <$> map (\(Right x)->x) <$> map Address.fromText
                 <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
-
+            -- Process each of the blocks, starting at the specified end block
+            -- and working backwatds, updating the data structures as we go.
+            (Just startTime, Just endTime, contractStore, transactionMap, newlyRecognisedWallets)
+                <- foldM
+                    (processBlock knownWallets)
+                    (Nothing, Nothing, cachedMap, M.empty, [])
+                    [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
             let
                 -- Filter this map to only list references to other contracts.
                 -- This is now a map of contracts to contracts which they
@@ -159,28 +161,33 @@ main = do
             printLibsWithTrans libNameMap libTransMap libMap
             putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
             -- Filter transaction map to show only contracts that reference known wallet libs
-            let knownTrans = M.filterWithKey (\k v->referencesKnownLib knownWallets refMap k) (transactionMap :: M.Map Address Int)
+            let knownTrans = M.filterWithKey (\k v->referencesKnownLib knownWallets contractStore k) (transactionMap :: M.Map Address Int)
                 totalKnownTrans = M.foldr' (+) 0 knownTrans
             mapM_ id $ M.mapWithKey (\address n->printf "%s - %d - %.2f%%\n" ("0x" <> Address.toText address) n (100*(fromIntegral n)/(fromIntegral totalKnownTrans) :: Double)) knownTrans
+            putStrLn "Recognised Wallet Growth"
+            mapM_ (\(t,n)->printf "%s,%d\n" (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) t) n) newlyRecognisedWallets
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
-                referencesKnownLib :: S.Set Address -> M.Map Address (S.Set Address) -> Address -> Bool
-                referencesKnownLib knownLibs refMap address =
-                    let refs = M.lookup address refMap
-                    in case refs of
-                        Nothing -> False
-                        Just rs -> not $ S.null $ S.intersection knownLibs rs
+
+referencesKnownLib :: S.Set Address -> M.Map Address AddressInfo -> Address -> Bool
+referencesKnownLib knownLibs contractStore address =
+    let refs = M.lookup address contractStore
+    in case refs of
+        Nothing -> False
+        Just addrInfo -> case addrInfo of
+            AccountAddress -> False
+            ContractAddress rs -> not $ S.null $ S.intersection knownLibs rs
 
 
-processBlock args bn = do
-    res <- Control.Exception.try $ processBlock' args bn
+processBlock knownWalletLibs args bn = do
+    res <- Control.Exception.try $ processBlock' knownWalletLibs args bn
     case res of
-        Left e -> let y = e :: SomeException in processBlock' args bn
+        Left e -> let y = e :: SomeException in processBlock' knownWalletLibs args bn
         Right x -> pure x
 
-processBlock' (startTime, endTime, refMap, transactionMap) blocknumberInt = do
+processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newlyRecognisedWallets) blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt
     let blocknumber = BlockNumber blocknumberInt
         filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
@@ -213,7 +220,15 @@ processBlock' (startTime, endTime, refMap, transactionMap) blocknumberInt = do
     let newEndTime = case endTime of
             Just s -> Just s
             Nothing -> Just thisBlockTime
-    pure (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap)
+        -- Get all of the addresses that are new in this block, that is
+        -- addresses from transactions of this block that have not previously
+        -- been involved in a transaction.
+        newlyUsedAddresses = S.fromList $ filter (\addr -> not $ addr `M.member` transactionMap) $ addressesFromBlock block
+        -- Filter this to only include addresses which reference wallet
+        -- libraries. This needs to use the new refMap, as these are inherently
+        -- new addresses.
+        newWallets = S.filter (referencesKnownLib knownWalletLibs newRefMap) newlyUsedAddresses
+    pure (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
 
 addressesFromBlock :: Block -> [Address]
 addressesFromBlock block =
