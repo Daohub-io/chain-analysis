@@ -165,11 +165,24 @@ main = do
                 totalKnownTrans = M.foldr' (+) 0 knownTrans
             mapM_ id $ M.mapWithKey (\address n->printf "%s - %d - %.2f%%\n" ("0x" <> Address.toText address) n (100*(fromIntegral n)/(fromIntegral totalKnownTrans) :: Double)) knownTrans
             putStrLn "Recognised Wallet Growth"
-            mapM_ (\(t,n)->printf "%s,%d\n" (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) t) n) newlyRecognisedWallets
+            mapM_ (\(t,n)->printf "%s,%d\n" (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) t) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
+
+reduceNewlyRecongisedAddress :: [(UTCTime, Int)] -> [(UTCTime,Int)]
+reduceNewlyRecongisedAddress = reduceNewlyRecongisedAddressWorker []
+
+reduceNewlyRecongisedAddressWorker :: [(UTCTime, Int)] -> [(UTCTime,Int)] -> [(UTCTime,Int)]
+reduceNewlyRecongisedAddressWorker acc [] = reverse acc
+reduceNewlyRecongisedAddressWorker acc ls =
+    let (top,end) = if length ls < 50
+            then (ls,[])
+            else splitAt 50 ls
+        t = fst $ last top
+        s = sum $ map snd top
+    in reduceNewlyRecongisedAddressWorker ((t,s):acc) end
 
 referencesKnownLib :: S.Set Address -> M.Map Address AddressInfo -> Address -> Bool
 referencesKnownLib knownLibs contractStore address =
@@ -228,7 +241,7 @@ processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newly
         -- libraries. This needs to use the new refMap, as these are inherently
         -- new addresses.
         newWallets = S.filter (referencesKnownLib knownWalletLibs newRefMap) newlyUsedAddresses
-    pure (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
+    pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
 
 addressesFromBlock :: Block -> [Address]
 addressesFromBlock block =
