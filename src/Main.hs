@@ -111,7 +111,7 @@ main = do
             -- and walk backwards through the blockchain.
             let endBlockNumber = 5625376
                 -- Number of blocks to process
-                n = 10
+                n = 20000
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
             -- Create a reference map, a map from a contract address to any
@@ -160,7 +160,8 @@ main = do
             putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
             -- Filter transaction map to show only contracts that reference known wallet libs
             let knownTrans = M.filterWithKey (\k v->referencesKnownLib knownWallets refMap k) (transactionMap :: M.Map Address Int)
-            mapM_ id $ M.mapWithKey (\address n->T.putStrLn $ "0x" <> Address.toText address <> " - " <> (T.pack $ show n)) knownTrans
+                totalKnownTrans = M.foldr' (+) 0 knownTrans
+            mapM_ id $ M.mapWithKey (\address n->printf "%s - %d - %.2f%%\n" ("0x" <> Address.toText address) n (100*(fromIntegral n)/(fromIntegral totalKnownTrans) :: Double)) knownTrans
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
