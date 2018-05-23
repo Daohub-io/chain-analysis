@@ -238,7 +238,7 @@ processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newly
                 Left e -> error $ show e
                 Right block -> do
                     BL.writeFile filePath $ Aeson.encode block
-                    putStr $ ("  " ++ (show $ Network.Ethereum.Web3.Types.blockNumber block)) ++ " from Infura"
+                    putStr $ ("  " ++ (show $ Network.Ethereum.Web3.Types.blockNumber block)) ++ " from network"
                     pure block
     let thisBlockTime = posixSecondsToUTCTime $ fromInteger $ read $ T.unpack $ blockTimestamp block
     putStrLn $ " - " ++ (show $ thisBlockTime)
@@ -504,8 +504,8 @@ addAddressesToRefMap block cachedMap addresses = do
             t1 <- getCurrentTime
             (Right codes) <- getContracts block unknownAddresses
             t2 <- getCurrentTime
-            print $ diffUTCTime t2 t1
-            withFile dataFilePath AppendMode $ \handle -> do
+            T.putStrLn $ "Retrieval time: " <> T.pack (show $ diffUTCTime t2 t1)
+            rMap <- withFile dataFilePath AppendMode $ \handle -> do
                 newRefMap <- foldM' (\cMap (address, contractCode) -> do
                     let addrInfoR = getAddressInfo address contractCode
                     T.putStrLn $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address) <> " - " <> T.pack (show addrInfoR)
@@ -514,6 +514,9 @@ addAddressesToRefMap block cachedMap addresses = do
                     pure $ addAddressToRefMap cMap (address, addrInfo)
                     ) cachedMap (zip unknownAddresses codes) :: IO (M.Map Address AddressInfo)
                 pure newRefMap
+            t3 <- getCurrentTime
+            T.putStrLn $ "Parsing time: " <> T.pack (show $ diffUTCTime t3 t2)
+            pure rMap
 
 addAddressToRefMap :: M.Map Address AddressInfo -> (Address, AddressInfo) -> M.Map Address AddressInfo
 addAddressToRefMap refMap (address, addressInfo) =
