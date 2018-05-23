@@ -29,12 +29,14 @@ import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Text.IO as T
 import qualified Data.Vector as V
+import Data.Time
 
 import System.Directory
 import System.Environment
 import System.FilePath
 import System.Process
 import System.IO.Temp
+import System.IO
 
 import Check.Stores
 import OpCode.Exporter
@@ -77,10 +79,10 @@ getLibFromEntry str =
 invertReferences :: M.Map Address (S.Set Address) -> M.Map Address (S.Set Address)
 invertReferences m = M.foldrWithKey' (\cAddress lAddresses acc -> S.foldr' (\s a -> M.insertWith S.union s (S.singleton cAddress) a) acc lAddresses) M.empty m
 
--- runWeb3 :: Web3 a -> IO (Either Web3Error a)
--- runWeb3 = runWeb3' (HttpProvider "http://localhost:8545")
 runWeb3 :: Web3 a -> IO (Either Web3Error a)
-runWeb3 = runWeb3' (HttpProvider "https://mainnet.infura.io/8cIXez93NfaTTAqSBhTt:8545")
+runWeb3 = runWeb3' (HttpProvider "http://localhost:8545")
+-- runWeb3 :: Web3 a -> IO (Either Web3Error a)
+-- runWeb3 = runWeb3' (HttpProvider "https://mainnet.infura.io/8cIXez93NfaTTAqSBhTt:8545")
 
 blockDir :: FilePath
 blockDir = joinPath ["data-query", "blocks"]
@@ -126,7 +128,7 @@ main = do
             createDirectoryIfMissing True blockDir
             -- The the latest block number we will process. We will start here
             -- and walk backwards through the blockchain.
-            let endBlockNumber = 5625376
+            let endBlockNumber = 4900000
                 -- Number of blocks to process
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
@@ -499,38 +501,36 @@ addAddressesToRefMap block cachedMap addresses = do
             pure cachedMap
         else do
             print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
+            t1 <- getCurrentTime
             (Right codes) <- getContracts block unknownAddresses
-            addressInfos <- mapM getAddressInfo (zip unknownAddresses codes)
-            let pairs = zip unknownAddresses addressInfos
-            newRefMap <- foldM' addAddressToRefMap cachedMap pairs
-            if length unknownAddresses > 0
-                then do
-                    appendFile dataFilePath $ unlines $ map show pairs
-                else pure ()
-            pure newRefMap
+            t2 <- getCurrentTime
+            print $ diffUTCTime t2 t1
+            withFile dataFilePath AppendMode $ \handle -> do
+                newRefMap <- foldM' (\cMap (address, contractCode) -> do
+                    let addrInfoR = getAddressInfo address contractCode
+                    T.putStrLn $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address) <> " - " <> T.pack (show addrInfoR)
+                    let addrInfo = fromRight (ContractAddress S.empty) addrInfoR
+                    hPutStrLn handle $ show (address, addrInfo)
+                    pure $ addAddressToRefMap cMap (address, addrInfo)
+                    ) cachedMap (zip unknownAddresses codes) :: IO (M.Map Address AddressInfo)
+                pure newRefMap
 
-addAddressToRefMap :: M.Map Address AddressInfo -> (Address, AddressInfo) -> IO (M.Map Address AddressInfo)
-addAddressToRefMap refMap (address, addressInfo) = do
-    T.putStr $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address)
-    pure $ M.insert address addressInfo refMap
+addAddressToRefMap :: M.Map Address AddressInfo -> (Address, AddressInfo) -> M.Map Address AddressInfo
+addAddressToRefMap refMap (address, addressInfo) =
+    M.insert address addressInfo refMap
 
-getAddressInfo :: (Address, Maybe Text) -> IO AddressInfo
-getAddressInfo (address, contractCode) = do
+getAddressInfo :: Address -> Maybe Text -> Either String AddressInfo
+getAddressInfo address contractCode = do
     case contractCode of
         Just code -> do
             let (bytecode, remainder) = B16.decode $ encodeUtf8 $ T.drop 2 code
             if remainder /= B.empty then error (show remainder) else pure ()
             case parseOnly (parseOpCodes <* endOfInput) bytecode of
-                Left err -> do
-                    putStrLn $ "  - Opcodes could not be parsed in full: " ++ err
-                    pure $ (ContractAddress S.empty)
-                Right parsed -> do
+                Left err -> Left $ "  - Opcodes could not be parsed in full: " ++ err
+                Right parsed ->
                     let addresses = findReferences parsed
-                    putStrLn $ "  - Contract (" <>  show  ((T.length code) `div` 2) <> " bytes)"
-                    pure $ (ContractAddress addresses)
-        Nothing -> do
-            putStrLn " - Account"
-            pure $ AccountAddress
+                    in Right $ ContractAddress addresses
+        Nothing -> Right AccountAddress
 
 iterateGetAddresses :: Maybe Address -> Int -> IO ()
 iterateGetAddresses offset n = do
