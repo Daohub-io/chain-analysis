@@ -89,8 +89,17 @@ blockDir = joinPath ["data-query", "blocks"]
 
 main = do
     (code:_) <- getArgs
-    print $ getRefs $ T.pack code
+    let r = getRefs $ T.pack code :: Either String AddressInfo
+    let refs = case r of
+            Left _ -> S.empty
+            Right x -> addressRefs x
+    mapM_ (T.putStrLn . ((<>) "0x") . Address.toText) $ S.toList refs
 
+addressRefs :: AddressInfo -> S.Set Address
+addressRefs (ContractAddress refs) = refs
+addressRefs _ = S.empty
+
+getRefs :: T.Text -> Either String AddressInfo
 getRefs code =
     let (bytecode, remainder) = B16.decode $ encodeUtf8 $ T.drop 2 $ code
     in  if remainder /= B.empty
