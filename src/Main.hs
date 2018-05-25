@@ -1,10 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell            #-}
 import Network.Ethereum.Web3 hiding (runWeb3)
 import Network.Ethereum.Web3.Web3
 import Network.Ethereum.Web3.JsonAbi as JsonAbi
 import Network.Ethereum.Web3.Types
 import Network.Ethereum.Web3.Eth as Eth
 import qualified Network.Ethereum.Web3.Address as Address
+
+import GHC.Generics
 
 import Control.Monad
 import Control.Exception
@@ -128,7 +134,7 @@ main = do
             createDirectoryIfMissing True blockDir
             -- The the latest block number we will process. We will start here
             -- and walk backwards through the blockchain.
-            let endBlockNumber = 4900000
+            let endBlockNumber = 5625376
                 -- Number of blocks to process
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
@@ -181,6 +187,15 @@ main = do
             mapM_ id $ M.mapWithKey (\address n->printf "%s - %d - %.2f%%\n" ("0x" <> Address.toText address) n (100*(fromIntegral n)/(fromIntegral totalKnownTrans) :: Double)) knownTrans
             putStrLn "Recognised Wallet Growth"
             mapM_ (\(t,n)->printf "%s,%d\n" (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) t) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
+            -- Output transaction map of all constracts
+            let fmtTime = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S"))
+            let notebookDir = "notebooks"
+            createDirectoryIfMissing True notebookDir
+            BL.writeFile (notebookDir </> "all-transactions.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
+            BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
+            BL.writeFile (notebookDir </> "library-refences.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
+            BL.writeFile (notebookDir </> "wallet-recognition-growth.csv") $ CSV.encodeDefaultOrderedByName $ map (\(time,n)->NewAddressCount (T.pack $ fmtTime time) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
+            writeFile (notebookDir </> "times.txt") (unlines [fmtTime startTime, fmtTime endTime])
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
@@ -192,9 +207,10 @@ reduceNewlyRecongisedAddress = reduceNewlyRecongisedAddressWorker []
 reduceNewlyRecongisedAddressWorker :: [(UTCTime, Int)] -> [(UTCTime,Int)] -> [(UTCTime,Int)]
 reduceNewlyRecongisedAddressWorker acc [] = reverse acc
 reduceNewlyRecongisedAddressWorker acc ls =
-    let (top,end) = if length ls < 50
+    let n = 50
+        (top,end) = if length ls < n
             then (ls,[])
-            else splitAt 50 ls
+            else splitAt n ls
         t = fst $ last top
         s = sum $ map snd top
     in reduceNewlyRecongisedAddressWorker ((t,s):acc) end
@@ -330,6 +346,55 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
 getTransactions = do
     transactions <- concat <$> mapM getAllTransactionFromBlock [1500000..1500003]
     BL.writeFile "transactions.csv" (CSV.encodeDefaultOrderedByName transactions)
+
+
+data TransactionCount = TransactionCount
+    { tcAddress :: Address
+    , tcCount :: Int
+    } deriving (Show, Eq, Generic)
+instance CSV.FromNamedRecord TransactionCount
+instance CSV.ToNamedRecord TransactionCount
+instance CSV.DefaultOrdered TransactionCount where
+    headerOrder _ = CSV.header
+        [ "tcAddress"
+        , "tcCount"
+        ]
+
+data ContractRefs = ContractRefs
+    { crAddress :: Address
+    , crRefs :: Text
+    } deriving (Show, Eq, Generic)
+instance CSV.FromNamedRecord ContractRefs
+instance CSV.ToNamedRecord ContractRefs
+instance CSV.DefaultOrdered ContractRefs where
+    headerOrder _ = CSV.header
+        [ "crAddress"
+        , "crRefs"
+        ]
+
+data LibraryRefs = LibraryRefs
+    { libAddress :: Address
+    , libRefs :: Text
+    } deriving (Show, Eq, Generic)
+instance CSV.FromNamedRecord LibraryRefs
+instance CSV.ToNamedRecord LibraryRefs
+instance CSV.DefaultOrdered LibraryRefs where
+    headerOrder _ = CSV.header
+        [ "libAddress"
+        , "libRefs"
+        ]
+
+data NewAddressCount = NewAddressCount
+    { naTime :: Text
+    , naCount :: Int
+    } deriving (Show, Eq, Generic)
+instance CSV.FromNamedRecord NewAddressCount
+instance CSV.ToNamedRecord NewAddressCount
+instance CSV.DefaultOrdered NewAddressCount where
+    headerOrder _ = CSV.header
+        [ "naTime"
+        , "naCount"
+        ]
 
 instance CSV.FromNamedRecord Transaction
 instance CSV.ToNamedRecord Transaction
