@@ -98,7 +98,7 @@ main = do
     (cmd:args) <- getArgs
     case cmd of
         "get-transactions" -> getTransactions
-        "print-transactions" -> printTransactions
+        -- "print-transactions" -> printTransactions
         "get-addresses" -> mainGetAddresses
         "get-data" -> do
             m <- iterateAddresses emptyCDS Nothing 30000
@@ -134,7 +134,8 @@ main = do
             createDirectoryIfMissing True blockDir
             -- The the latest block number we will process. We will start here
             -- and walk backwards through the blockchain.
-            let endBlockNumber = 4900000
+            -- let endBlockNumber = 4900000
+            let endBlockNumber = 5625376
                 -- Number of blocks to process
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
@@ -172,15 +173,14 @@ main = do
                 -- reference.
                 refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract contractStore
                 -- Invert that map to create a map of contracts to contracts
-                -- that reference them. Filter out addresses that aren't
-                -- contracts.
+                -- that reference them.
                 libMap = M.filterWithKey (\k _->isContractFromMap contractStore k) $ invertReferences refMap
                 -- Find the number of transactions for each lib. Go through each
                 -- contract lib and add up the number of transactions it is
                 -- associated with. The will result in double counting a
                 -- transaction if it is on both ends.
                 libTransMap = M.map (g transactionMap) libMap
-            printLibsWithTrans libNameMap libTransMap libMap
+            printLibsWithTrans contractStore libNameMap libTransMap libMap
             putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
             -- Filter transaction map to show only contracts that reference known wallet libs
             let knownTrans = M.filterWithKey (\k v->referencesKnownLib knownWallets contractStore k) (transactionMap :: M.Map Address Int)
@@ -464,33 +464,33 @@ instance CSV.FromField BlockNumber where
 instance CSV.ToField BlockNumber where
     toField (BlockNumber n) = CSV.toField n
 
-printTransactions = do
-    readIn <- CSV.decodeByName <$> BL.readFile "transactions.csv"
-    let transactions = case readIn of
-            Left e -> error $ show e
-            Right (h, x) -> V.toList x :: [Transaction]
+-- printTransactions = do
+--     readIn <- CSV.decodeByName <$> BL.readFile "transactions.csv"
+--     let transactions = case readIn of
+--             Left e -> error $ show e
+--             Right (h, x) -> V.toList x :: [Transaction]
 
-    contractStore <- read <$> readFile dataFilePath
-    libNameMap <- getLibMetadataMap
-    let
-        -- |A map of contracts to references they hold to other contracts
-        refMap = buildLibMap contractStore
-        -- |A map of contracts to contracts that reference them
-        libMap = invertReferences refMap
+--     contractStore <- read <$> readFile dataFilePath
+--     libNameMap <- getLibMetadataMap
+--     let
+--         -- |A map of contracts to references they hold to other contracts
+--         refMap = buildLibMap contractStore
+--         -- |A map of contracts to contracts that reference them
+--         libMap = invertReferences refMap
 
-    let m = getTransactionNumbers M.empty transactions
-    -- Go through each contract lib and add up the number of transactions it is
-    -- associated with. The will result in double counting a transaction if it
-    -- is on both ends.
-    mapM_ (\(k,v) -> T.putStrLn ("0x" <> Address.toText k <> " - " <>  (T.pack $ show v) <> " references: " <> (T.pack $ show $ M.lookup k refMap)))
-        $ sortBy (\(_,a) (_,b)-> compare a b) $ M.toList m
-    let transMap = M.mapWithKey (g m) libMap
-    mapM_ id $ M.mapWithKey (\k v -> putStrLn $ show k ++ " - " ++ show v) transMap
-    printLibsWithTrans libNameMap transMap libMap
-    where
-        printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
-        g m libAddress addresses =
-            M.foldr (+) 0 $ m `M.restrictKeys` addresses
+--     let m = getTransactionNumbers M.empty transactions
+--     -- Go through each contract lib and add up the number of transactions it is
+--     -- associated with. The will result in double counting a transaction if it
+--     -- is on both ends.
+--     mapM_ (\(k,v) -> T.putStrLn ("0x" <> Address.toText k <> " - " <>  (T.pack $ show v) <> " references: " <> (T.pack $ show $ M.lookup k refMap)))
+--         $ sortBy (\(_,a) (_,b)-> compare a b) $ M.toList m
+--     let transMap = M.mapWithKey (g m) libMap
+--     mapM_ id $ M.mapWithKey (\k v -> putStrLn $ show k ++ " - " ++ show v) transMap
+--     printLibsWithTrans contractStore libNameMap transMap libMap
+--     where
+--         printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
+--         g m libAddress addresses =
+--             M.foldr (+) 0 $ m `M.restrictKeys` addresses
 
 getTransactionNumbers m transactions = foldr f m transactions
     where
@@ -502,12 +502,12 @@ getTransactionNumbers m transactions = foldr f m transactions
                 from = txFrom trans
                 toMaybe = txTo trans
 -- printLibs :: M.Map Address (S.Set Address) -> IO ()
-printLibsWithTrans libNameMap transMap = putStrLn . (showLibsWithTrans libNameMap transMap)
+printLibsWithTrans contractStore libNameMap transMap = putStrLn . (showLibsWithTrans contractStore libNameMap transMap)
 
 -- showLibs :: M.Map Address (S.Set Address) -> String
-showLibsWithTrans libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,_,a) (_,_,b)->compare a b)) . M.elems . (M.mapWithKey f)
+showLibsWithTrans contractStore libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,_,a) (_,_,b)->compare a b)) . M.elems . (M.mapWithKey f)
     where
-        showIt (address, count, transCount) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> " - " <> show transCount <> " transactions" <> info address
+        showIt (address, count, transCount) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> " - " <> show transCount <> " transactions" <> info address <> " Wallet: " <> ( (show $ isContractFromMap contractStore address))
         f k v = (k, S.size v, t)
             where t = case M.lookup k transMap of
                         Just x -> x
