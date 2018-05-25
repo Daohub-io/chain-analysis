@@ -134,7 +134,7 @@ main = do
             createDirectoryIfMissing True blockDir
             -- The the latest block number we will process. We will start here
             -- and walk backwards through the blockchain.
-            let endBlockNumber = 5625376
+            let endBlockNumber = 4900000
                 -- Number of blocks to process
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
