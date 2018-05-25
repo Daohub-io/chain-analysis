@@ -172,8 +172,9 @@ main = do
                 -- reference.
                 refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract contractStore
                 -- Invert that map to create a map of contracts to contracts
-                -- that reference them.
-                libMap = invertReferences refMap
+                -- that reference them. Filter out addresses that aren't
+                -- contracts.
+                libMap = M.filterWithKey (\k _->isContractFromMap contractStore k) $ invertReferences refMap
                 -- Find the number of transactions for each lib. Go through each
                 -- contract lib and add up the number of transactions it is
                 -- associated with. The will result in double counting a
@@ -200,6 +201,11 @@ main = do
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
+
+isContractFromMap :: M.Map Address AddressInfo -> Address -> Bool
+isContractFromMap contractStore m = case M.lookup m contractStore of
+    Nothing -> False
+    Just entry -> isContract entry
 
 reduceNewlyRecongisedAddress :: [(UTCTime, Int)] -> [(UTCTime,Int)]
 reduceNewlyRecongisedAddress = reduceNewlyRecongisedAddressWorker []
