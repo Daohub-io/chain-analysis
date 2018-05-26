@@ -707,10 +707,11 @@ buildRefMap block cachedMap addresses = do
 
 addAddressesToRefMap :: DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
 addAddressesToRefMap block cachedMap addresses = do
-    let unknownAddresses = filter (\x-> case M.lookup x cachedMap of
-            Nothing -> True
-            Just (AccountAddress) -> True
-            _ -> False) addresses
+    let unknownAddresses = filter (\x-> not $ x `M.member` cachedMap) addresses
+    -- let unknownAddresses = filter (\x-> case M.lookup x cachedMap of
+    --         Nothing -> True
+    --         Just (AccountAddress) -> True
+    --         _ -> False) addresses
     if length unknownAddresses == 0
         then do
             putStrLn "  All addresses known"
@@ -718,7 +719,8 @@ addAddressesToRefMap block cachedMap addresses = do
         else do
             print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
             t1 <- getCurrentTime
-            (Right codes) <- getContracts block unknownAddresses
+            -- (Right codes) <- getContracts block unknownAddresses
+            (Right codes) <- getContracts defaultBlock unknownAddresses
             t2 <- getCurrentTime
             T.putStrLn $ "Retrieval time: " <> T.pack (show $ diffUTCTime t2 t1)
             rMap <- withFile dataFilePath AppendMode $ \handle -> do
@@ -859,6 +861,7 @@ printMap m = let l = M.toList m
     in mapM_ (\(k,v)->putStr "Contract: " >> print k >> putStrLn "  References: " >> mapM_ (\x->putStr "    " >> print x) v) l
 
 block = (BlockWithNumber (BlockNumber 4900000))
+defaultBlock = (BlockWithNumber (BlockNumber 4900000))
 
 getContract :: Address -> IO (Either Web3Error (Maybe Text))
 getContract address = runWeb3 $ do
