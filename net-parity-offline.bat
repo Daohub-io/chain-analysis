@@ -1,1 +1,1 @@
-parity --pruning archive -d D:\ethchain --fat-db on --mode offline
+parity --pruning archive -d D:\ethchain3 --fat-db on --mode offline

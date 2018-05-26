@@ -154,9 +154,9 @@ main = do
                 then do
                     raw <- lines <$> readFile dataFilePath
                     let entryList = map read raw
-                    pure $ M.fromList entryList
+                    pure $ M.fromListWith combineRefsEntry entryList
                 else pure M.empty
-            let cachedMap = M.union oldCachedMap newCachedMap
+            let cachedMap = M.unionWith combineRefsEntry oldCachedMap newCachedMap
             knownWallets <- S.fromList
                 <$> map (\(Right x)->x) <$> map Address.fromText
                 <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
@@ -194,13 +194,98 @@ main = do
             createDirectoryIfMissing True notebookDir
             BL.writeFile (notebookDir </> "all-transactions.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
             BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
-            BL.writeFile (notebookDir </> "library-refences.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
+            BL.writeFile (notebookDir </> "library-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
+            -- BL.writeFile (notebookDir </> "known-library-names.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libNameMap
             BL.writeFile (notebookDir </> "wallet-recognition-growth.csv") $ CSV.encodeDefaultOrderedByName $ map (\(time,n)->NewAddressCount (T.pack $ fmtTime time) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
             writeFile (notebookDir </> "times.txt") (unlines [fmtTime startTime, fmtTime endTime])
             where
                 printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
                 g transMap addresses =
                     M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
+        "print-libs-start" -> do
+            let n = case args of
+                    (a:_) -> read a
+                    _ -> 20000
+            -- Find all the available block files in the block directory
+            createDirectoryIfMissing True blockDir
+            -- The the latest block number we will process. We will start here
+            -- and walk backwards through the blockchain.
+            -- let endBlockNumber = 4900000
+            let startBlockNumber = 0
+            processBlockForward startBlockNumber
+            processBlockForward (startBlockNumber+1)
+            --     -- Number of blocks to process
+            -- -- A map of addresses to known contract names
+            -- libNameMap <- getLibMetadataMap
+            -- -- Create a reference map, a map from a contract address to any
+            -- -- addresses it references.
+            -- -- First check if there is already a data
+            -- -- file contiaining this information.
+            -- cacheExits <- doesFileExist dataFilePath
+            -- oldCacheExits <- doesFileExist oldDataFilePath
+            -- -- If the cache exists, read it in and use that as a starting point,
+            -- -- else start with an empy map.
+            -- oldCachedMap <- if oldCacheExits
+            --     then read <$> readFile oldDataFilePath
+            --     else pure M.empty
+            -- newCachedMap <- if cacheExits
+            --     then do
+            --         raw <- lines <$> readFile dataFilePath
+            --         let entryList = map read raw
+            --         pure $ M.fromList entryList
+            --     else pure M.empty
+            -- let cachedMap = M.union oldCachedMap newCachedMap
+            -- knownWallets <- S.fromList
+            --     <$> map (\(Right x)->x) <$> map Address.fromText
+            --     <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
+            -- -- Process each of the blocks, starting at the specified end block
+            -- -- and working backwatds, updating the data structures as we go.
+            -- (Just startTime, Just endTime, contractStore, transactionMap, newlyRecognisedWallets)
+            --     <- foldM
+            --         (processBlock knownWallets)
+            --         (Nothing, Nothing, cachedMap, M.empty, [])
+            --         [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
+            -- let
+            --     -- Filter this map to only list references to other contracts.
+            --     -- This is now a map of contracts to contracts which they
+            --     -- reference.
+            --     refMap = M.map (\(ContractAddress ref)->ref) $ M.filter isContract contractStore
+            --     -- Invert that map to create a map of contracts to contracts
+            --     -- that reference them.
+            --     libMap = M.filterWithKey (\k _->isContractFromMap contractStore k) $ invertReferences refMap
+            --     -- Find the number of transactions for each lib. Go through each
+            --     -- contract lib and add up the number of transactions it is
+            --     -- associated with. The will result in double counting a
+            --     -- transaction if it is on both ends.
+            --     libTransMap = M.map (g transactionMap) libMap
+            -- printLibsWithTrans contractStore libNameMap libTransMap libMap
+            -- putStrLn $ "Data from " ++ show startTime ++ " to " ++ show endTime
+            -- -- Filter transaction map to show only contracts that reference known wallet libs
+            -- let knownTrans = M.filterWithKey (\k v->referencesKnownLib knownWallets contractStore k) (transactionMap :: M.Map Address Int)
+            --     totalKnownTrans = M.foldr' (+) 0 knownTrans
+            -- mapM_ id $ M.mapWithKey (\address n->printf "%s - %d - %.2f%%\n" ("0x" <> Address.toText address) n (100*(fromIntegral n)/(fromIntegral totalKnownTrans) :: Double)) knownTrans
+            -- putStrLn "Recognised Wallet Growth"
+            -- mapM_ (\(t,n)->printf "%s,%d\n" (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) t) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
+            -- -- Output transaction map of all constracts
+            -- let fmtTime = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S"))
+            -- let notebookDir = "notebooks"
+            -- createDirectoryIfMissing True notebookDir
+            -- BL.writeFile (notebookDir </> "all-transactions.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
+            -- BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
+            -- BL.writeFile (notebookDir </> "library-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
+            -- BL.writeFile (notebookDir </> "known-library-names.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libNameMap
+            -- BL.writeFile (notebookDir </> "wallet-recognition-growth.csv") $ CSV.encodeDefaultOrderedByName $ map (\(time,n)->NewAddressCount (T.pack $ fmtTime time) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
+            -- writeFile (notebookDir </> "times.txt") (unlines [fmtTime startTime, fmtTime endTime])
+            -- where
+            --     printFromTo (from, to) = print ("0x" <> Address.toText from, "0x" <> Address.toText to)
+            --     g transMap addresses =
+            --         M.foldr (+) 0 $ transMap `M.restrictKeys` addresses
+
+combineRefsEntry :: AddressInfo -> AddressInfo -> AddressInfo
+combineRefsEntry AccountAddress AccountAddress = AccountAddress
+combineRefsEntry a@(ContractAddress _) b@(ContractAddress _) = if a == b then a else error "contract code changed"
+combineRefsEntry a@(ContractAddress _) _ = a
+combineRefsEntry _ b@(ContractAddress _) = b
 
 isContractFromMap :: M.Map Address AddressInfo -> Address -> Bool
 isContractFromMap contractStore m = case M.lookup m contractStore of
@@ -280,6 +365,64 @@ processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newly
         newWallets = S.filter (referencesKnownLib knownWalletLibs newRefMap) newlyUsedAddresses
     pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
 
+processBlockForward blocknumberInt = do
+    putStr $ "Processing block: #" ++ show blocknumberInt
+    let blocknumber = BlockNumber blocknumberInt
+        filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
+    let bnText = (T.pack $ printf "0x%x" blocknumberInt)
+    print =<< (runWeb3 $ Eth.getBlockByNumber bnText)
+    -- Get all transactions.
+
+    -- If the transaction is a creation, check whether it
+    -- is a known contract. If it is a known contract add it to the map. If it
+    -- is not a known contract, check if it references a known contract. If it
+    -- references a known contract, add it to the map.
+
+    -- If it is not a contract creation, check if it involves a contract in the
+    -- map. If it does, increment that contracts count by 1 (for both from and
+    -- to).
+
+
+    -- -- First, check if the data is already on disk
+    -- alreadyExists <- doesFileExist filePath
+    -- block <- if alreadyExists
+    --     -- File exists already, so use that
+    --     then do
+    --         readIn <- Aeson.eitherDecode <$> BL.readFile filePath
+    --         let block = case readIn of
+    --                 Left e -> error $ show e
+    --                 Right x -> x
+    --         putStr $ ("  " ++ (show $ Network.Ethereum.Web3.Types.blockNumber block)) ++ " from cache"
+    --         pure block
+    --     -- File does not exist and the block has to be retrieved
+    --     else do
+    --         let bnText = (T.pack $ printf "0x%x" blocknumberInt)
+    --         blockR <- runWeb3 $ Eth.getBlockByNumber bnText
+    --         case blockR of
+    --             Left e -> error $ show e
+    --             Right block -> do
+    --                 BL.writeFile filePath $ Aeson.encode block
+    --                 putStr $ ("  " ++ (show $ Network.Ethereum.Web3.Types.blockNumber block)) ++ " from network"
+    --                 pure block
+    -- let thisBlockTime = posixSecondsToUTCTime $ fromInteger $ read $ T.unpack $ blockTimestamp block
+    -- putStrLn $ " - " ++ (show $ thisBlockTime)
+    -- let newTransactionMap = getTransactionNumbers transactionMap $ blockTransactions block
+    -- putStrLn $ "  Transaction map size: " ++ (show $ M.size newTransactionMap)
+    -- newRefMap <- buildRefMap (BlockWithNumber blocknumber) refMap $ addressesFromBlock block
+    -- let newEndTime = case endTime of
+    --         Just s -> Just s
+    --         Nothing -> Just thisBlockTime
+    --     -- Get all of the addresses that are new in this block, that is
+    --     -- addresses from transactions of this block that have not previously
+    --     -- been involved in a transaction.
+    --     newlyUsedAddresses = S.fromList $ filter (\addr -> not $ addr `M.member` transactionMap) $ addressesFromBlock block
+    --     -- Filter this to only include addresses which reference wallet
+    --     -- libraries. This needs to use the new refMap, as these are inherently
+    --     -- new addresses.
+    --     newWallets = S.filter (referencesKnownLib knownWalletLibs newRefMap) newlyUsedAddresses
+    -- pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
+
+
 addressesFromBlock :: Block -> [Address]
 addressesFromBlock block =
     let transactions = blockTransactions block
@@ -352,7 +495,6 @@ showLibs libNameMap = unlines . (map showIt) . (sortBy (\(_,a) (_,b)->compare a 
 getTransactions = do
     transactions <- concat <$> mapM getAllTransactionFromBlock [1500000..1500003]
     BL.writeFile "transactions.csv" (CSV.encodeDefaultOrderedByName transactions)
-
 
 data TransactionCount = TransactionCount
     { tcAddress :: Address
@@ -565,7 +707,10 @@ buildRefMap block cachedMap addresses = do
 
 addAddressesToRefMap :: DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
 addAddressesToRefMap block cachedMap addresses = do
-    let unknownAddresses = filter (\x-> not $ x `M.member` cachedMap) addresses
+    let unknownAddresses = filter (\x-> case M.lookup x cachedMap of
+            Nothing -> True
+            Just (AccountAddress) -> True
+            _ -> False) addresses
     if length unknownAddresses == 0
         then do
             putStrLn "  All addresses known"
