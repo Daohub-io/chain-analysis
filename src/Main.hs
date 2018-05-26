@@ -740,12 +740,49 @@ addAddressesToRefMap block cachedMap addresses = do
                     let addrInfo = fromRight (ContractAddress S.empty) addrInfoR
                     -- If we reference knew contracts we didn't know about, we need to find those too
                     cMap2 <- case addrInfo of
-                        ContractAddress refs -> addAddressesToRefMap block cMap (S.toList $ S.filter ((/=) address) refs)
+                        ContractAddress refs -> addAddressesToRefMapWithHandle handle block cMap (S.toList $ S.filter ((/=) address) refs)
                         _ -> pure cMap
                     hPutStrLn handle $ show (address, addrInfo)
                     pure $ addAddressToRefMap cMap2 (address, addrInfo)
                     ) cachedMap (zip unknownAddresses codes) :: IO (M.Map Address AddressInfo)
                 pure newRefMap
+            t3 <- getCurrentTime
+            T.putStrLn $ "Parsing time: " <> T.pack (show $ diffUTCTime t3 t2)
+            pure rMap
+
+addAddressesToRefMapWithHandle :: Handle -> DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
+addAddressesToRefMapWithHandle handle block cachedMap addresses = do
+    let unknownAddressesDirect = filter (\x-> not $ x `M.member` cachedMap) addresses
+    let unknownRefs = concat $ map (\addr->case M.lookup addr cachedMap of
+            Just (ContractAddress refs) -> S.toList refs
+            _ -> []) addresses
+    let unknownAddresses = nub $ unknownAddressesDirect ++ unknownRefs
+    -- let unknownAddresses = filter (\x-> case M.lookup x cachedMap of
+    --         Nothing -> True
+    --         Just (AccountAddress) -> True
+    --         _ -> False) addresses
+    if length unknownAddresses == 0
+        then do
+            putStrLn "  All addresses known"
+            pure cachedMap
+        else do
+            print $ "Retrieving " ++ show (length unknownAddresses) ++ " addresses from network"
+            t1 <- getCurrentTime
+            -- (Right codes) <- getContracts block unknownAddresses
+            (Right codes) <- getContracts defaultBlock unknownAddresses
+            t2 <- getCurrentTime
+            T.putStrLn $ "Retrieval time: " <> T.pack (show $ diffUTCTime t2 t1)
+            rMap <- foldM' (\cMap (address, contractCode) -> do
+                    let addrInfoR = getAddressInfo address contractCode
+                    T.putStrLn $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address) <> " - " <> T.pack (show addrInfoR)
+                    let addrInfo = fromRight (ContractAddress S.empty) addrInfoR
+                    -- If we reference knew contracts we didn't know about, we need to find those too
+                    cMap2 <- case addrInfo of
+                        ContractAddress refs -> addAddressesToRefMap block cMap (S.toList $ S.filter ((/=) address) refs)
+                        _ -> pure cMap
+                    hPutStrLn handle $ show (address, addrInfo)
+                    pure $ addAddressToRefMap cMap2 (address, addrInfo)
+                    ) cachedMap (zip unknownAddresses codes) :: IO (M.Map Address AddressInfo)
             t3 <- getCurrentTime
             T.putStrLn $ "Parsing time: " <> T.pack (show $ diffUTCTime t3 t2)
             pure rMap
