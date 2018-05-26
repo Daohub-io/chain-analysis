@@ -713,7 +713,11 @@ buildRefMap block cachedMap addresses = do
 
 addAddressesToRefMap :: DefaultBlock -> M.Map Address AddressInfo -> [Address] -> IO (M.Map Address AddressInfo)
 addAddressesToRefMap block cachedMap addresses = do
-    let unknownAddresses = filter (\x-> not $ x `M.member` cachedMap) addresses
+    let unknownAddressesDirect = filter (\x-> not $ x `M.member` cachedMap) addresses
+    let unknownRefs = concat $ map (\addr->case M.lookup addr cachedMap of
+            Just (ContractAddress refs) -> S.toList refs
+            _ -> []) addresses
+    let unknownAddresses = nub $ unknownAddressesDirect ++ unknownRefs
     -- let unknownAddresses = filter (\x-> case M.lookup x cachedMap of
     --         Nothing -> True
     --         Just (AccountAddress) -> True
