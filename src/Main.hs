@@ -134,8 +134,8 @@ main = do
             createDirectoryIfMissing True blockDir
             -- The the latest block number we will process. We will start here
             -- and walk backwards through the blockchain.
-            -- let endBlockNumber = 4900000
-            let endBlockNumber = 5625376
+            let endBlockNumber = 4900000
+            -- let endBlockNumber = 5625376
                 -- Number of blocks to process
             -- A map of addresses to known contract names
             libNameMap <- getLibMetadataMap
@@ -858,7 +858,7 @@ printMap :: (Show a, Show b, Traversable t) => M.Map a (t b) -> IO ()
 printMap m = let l = M.toList m
     in mapM_ (\(k,v)->putStr "Contract: " >> print k >> putStrLn "  References: " >> mapM_ (\x->putStr "    " >> print x) v) l
 
-block = (BlockWithNumber (BlockNumber 1500000))
+block = (BlockWithNumber (BlockNumber 4900000))
 
 getContract :: Address -> IO (Either Web3Error (Maybe Text))
 getContract address = runWeb3 $ do
