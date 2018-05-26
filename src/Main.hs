@@ -655,7 +655,7 @@ printLibsWithTrans contractStore libNameMap transMap = putStrLn . (showLibsWithT
 -- showLibs :: M.Map Address (S.Set Address) -> String
 showLibsWithTrans contractStore libNameMap transMap = unlines . (map showIt) . (sortBy (\(_,_,a) (_,_,b)->compare a b)) . M.elems . (M.mapWithKey f)
     where
-        showIt (address, count, transCount) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> " - " <> show transCount <> " transactions" <> info address <> " Wallet: " <> ( (show $ isContractFromMap contractStore address))
+        showIt (address, count, transCount) = "0x" <> (T.unpack $ Address.toText address) <> " - " <> show count <> " references" <> " - " <> show transCount <> " transactions" <> info address <> " Contract: " <> ( (show $ isContractFromMap contractStore address))
         f k v = (k, S.size v, t)
             where t = case M.lookup k transMap of
                         Just x -> x
@@ -734,8 +734,12 @@ addAddressesToRefMap block cachedMap addresses = do
                     let addrInfoR = getAddressInfo address contractCode
                     T.putStrLn $ "    addAddressToRefMap: " <> "0x" <> (Address.toText address) <> " - " <> T.pack (show addrInfoR)
                     let addrInfo = fromRight (ContractAddress S.empty) addrInfoR
+                    -- If we reference knew contracts we didn't know about, we need to find those too
+                    cMap2 <- case addrInfo of
+                        ContractAddress refs -> addAddressesToRefMap block cMap (S.toList $ S.filter ((/=) address) refs)
+                        _ -> pure cMap
                     hPutStrLn handle $ show (address, addrInfo)
-                    pure $ addAddressToRefMap cMap (address, addrInfo)
+                    pure $ addAddressToRefMap cMap2 (address, addrInfo)
                     ) cachedMap (zip unknownAddresses codes) :: IO (M.Map Address AddressInfo)
                 pure newRefMap
             t3 <- getCurrentTime
