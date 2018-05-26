@@ -190,7 +190,7 @@ main = do
             mapM_ (\(t,n)->printf "%s,%d\n" (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) t) n) $ reduceNewlyRecongisedAddress newlyRecognisedWallets
             -- Output transaction map of all constracts
             let fmtTime = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S"))
-            let notebookDir = "notebooks"
+            let notebookDir = "../notebooks"
             createDirectoryIfMissing True notebookDir
             BL.writeFile (notebookDir </> "all-transactions.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
             BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
@@ -214,6 +214,12 @@ main = do
             let startBlockNumber = 0
             processBlockForward startBlockNumber
             processBlockForward (startBlockNumber+1)
+
+            t1 <- getCurrentTime
+            let blocks = [0..99]
+            mapM_ processBlockForward blocks
+            t2 <- getCurrentTime
+            T.putStrLn $ "Block retrieval: " <> T.pack (show $ diffUTCTime t2 t1)
             --     -- Number of blocks to process
             -- -- A map of addresses to known contract names
             -- libNameMap <- getLibMetadataMap
