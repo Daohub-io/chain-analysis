@@ -778,7 +778,7 @@ addAddressesToRefMapWithHandle handle block cachedMap addresses = do
                     let addrInfo = fromRight (ContractAddress S.empty) addrInfoR
                     -- If we reference knew contracts we didn't know about, we need to find those too
                     cMap2 <- case addrInfo of
-                        ContractAddress refs -> addAddressesToRefMap block cMap (S.toList $ S.filter ((/=) address) refs)
+                        ContractAddress refs -> addAddressesToRefMapWithHandle handle block cMap (S.toList $ S.filter ((/=) address) refs)
                         _ -> pure cMap
                     hPutStrLn handle $ show (address, addrInfo)
                     pure $ addAddressToRefMap cMap2 (address, addrInfo)
