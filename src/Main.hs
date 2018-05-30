@@ -126,6 +126,17 @@ main = do
                 -- |A map of contracts to contracts that reference them
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
+        "print-transactions" -> do
+            let endBlockNumber = 500000
+            let n = case args of
+                    (a:_) -> read a
+                    _ -> 20000
+            withFile "transactions.csv" WriteMode $ \handle -> do
+                hPutStr handle "BlockNumber" >> hPutStr handle ","
+                hPutStr handle "TransactionIndex" >> hPutStr handle ","
+                hPutStr handle "FromAddress" >> hPutStr handle ","
+                hPutStr handle "ToAddress" >> hPutStrLn handle ""
+                mapM_ (printTransactionsOfBlock handle) [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
         "print-libs-end" -> do
             let n = case args of
                     (a:_) -> read a
@@ -162,10 +173,10 @@ main = do
                 <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
             -- Process each of the blocks, starting at the specified end block
             -- and working backwatds, updating the data structures as we go.
-            (Just startTime, Just endTime, contractStore, transactionMap, newlyRecognisedWallets, transactions)
+            (Just startTime, Just endTime, contractStore, transactionMap, newlyRecognisedWallets)
                 <- foldM
                     (processBlock knownWallets)
-                    (Nothing, Nothing, cachedMap, M.empty, [], [])
+                    (Nothing, Nothing, cachedMap, M.empty, [])
                     [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
             let
                 -- Filter this map to only list references to other contracts.
@@ -193,7 +204,7 @@ main = do
             let notebookDir = "../notebooks"
             createDirectoryIfMissing True notebookDir
             BL.writeFile (notebookDir </> "contract-or-account.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,addrInfo)->AddressAndInfo address (addressInfoToAddressType addrInfo)) $ M.toList contractStore
-            BL.writeFile (notebookDir </> "transactions.csv") $ CSV.encodeDefaultOrderedByName $ (transactions :: [Transaction])
+            -- BL.writeFile (notebookDir </> "transactions.csv") $ CSV.encodeDefaultOrderedByName $ (transactions :: [Transaction])
             BL.writeFile (notebookDir </> "transaction-counts.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
             BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
             BL.writeFile (notebookDir </> "library-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
@@ -323,18 +334,53 @@ referencesKnownLib knownLibs contractStore address =
             AccountAddress -> False
             ContractAddress rs -> not $ S.null $ S.intersection knownLibs rs
 
+printTransactionsOfBlock :: Handle -> Integer -> IO ()
+printTransactionsOfBlock handle blocknumberInt = do
+    let blocknumber = BlockNumber blocknumberInt
+        filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
+    -- First, check if the data is already on disk
+    -- First, check if the data is already on disk
+    alreadyExists <- doesFileExist filePath
+    block <- if alreadyExists
+        -- File exists already, so use that
+        then do
+            readIn <- Aeson.eitherDecode <$> BL.readFile filePath
+            let block = case readIn of
+                    Left e -> error $ show e
+                    Right x -> x
+            pure block
+        -- File does not exist and the block has to be retrieved
+        else do
+            let bnText = (T.pack $ printf "0x%x" blocknumberInt)
+            blockR <- runWeb3 $ Eth.getBlockByNumber bnText
+            case blockR of
+                Left e -> error $ show e
+                Right block -> do
+                    BL.writeFile filePath $ Aeson.encode block
+                    pure block
+    let thisBlockTime = posixSecondsToUTCTime $ fromInteger $ read $ T.unpack $ blockTimestamp block
+    mapM_ (printTransactionOfBlock handle) $ blockTransactions block
+
+printTransactionOfBlock handle transaction = do
+    hPutStr handle (show $ (\(BlockNumber i)->i) $ txBlockNumber transaction) >> hPutStr handle ","
+    hPutStr handle (show $ (read $ T.unpack $ txTransactionIndex transaction :: Integer)) >> hPutStr handle ","
+    hPutStr handle (T.unpack $ ((<>) "0x") . Address.toText $ txFrom transaction) >> hPutStr handle ","
+    hPutStr handle (maybe "" (T.unpack . ((<>) "0x") . Address.toText) $ txTo transaction)
+    hPutStrLn handle ""
+
+
 processBlock
     :: S.Set Address
-    -> (a, Maybe UTCTime, M.Map Address AddressInfo, M.Map Address Int, [(UTCTime, Int)], [Transaction])
+    -> (a, Maybe UTCTime, M.Map Address AddressInfo, M.Map Address Int, [(UTCTime, Int)])
     -> Integer
-    -> IO (Maybe UTCTime, Maybe UTCTime, M.Map Address AddressInfo, M.Map Address Int, [(UTCTime, Int)], [Transaction])
+    -> IO (Maybe UTCTime, Maybe UTCTime, M.Map Address AddressInfo, M.Map Address Int, [(UTCTime, Int)])
 processBlock knownWalletLibs args bn = do
     res <- Control.Exception.try $ processBlock' knownWalletLibs args bn
     case res of
         Left e -> let y = e :: SomeException in processBlock' knownWalletLibs args bn
         Right x -> pure x
 
-processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newlyRecognisedWallets, transactions) blocknumberInt = do
+processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newlyRecognisedWallets) blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt
     let blocknumber = BlockNumber blocknumberInt
         filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
@@ -375,7 +421,7 @@ processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newly
         -- libraries. This needs to use the new refMap, as these are inherently
         -- new addresses.
         newWallets = S.filter (referencesKnownLib knownWalletLibs newRefMap) newlyUsedAddresses
-    pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets, (blockTransactions block)++transactions)
+    pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
 
 processBlockForward blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt
@@ -716,6 +762,11 @@ getAllTransactionFromBlock blocknumber = do
                     Nothing -> error "Transaction could not be retrieved"
                     Just y -> pure y
 
+
+-- data SimpleTransaction = SimpleTransaction
+--     {
+
+--     }
 getSimpleTransactions :: Integer -> IO [(Address, Address)]
 getSimpleTransactions blocknumber =
     -- Discards all transactions without a to adddress
