@@ -156,7 +156,7 @@ main = do
                     let entryList = map read raw
                     pure $ M.fromListWith combineRefsEntry entryList
                 else pure M.empty
-            let cachedMap = M.unionWith combineRefsEntry oldCachedMap newCachedMap
+            let cachedMap = M.unionWith combineRefsEntry oldCachedMap newCachedMap :: M.Map Address AddressInfo
             knownWallets <- S.fromList
                 <$> map (\(Right x)->x) <$> map Address.fromText
                 <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
@@ -192,6 +192,7 @@ main = do
             let fmtTime = formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S"))
             let notebookDir = "../notebooks"
             createDirectoryIfMissing True notebookDir
+            BL.writeFile (notebookDir </> "contract-or-account.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,addrInfo)->AddressAndInfo address (addressInfoToAddressType addrInfo)) $ M.toList contractStore
             BL.writeFile (notebookDir </> "all-transactions.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
             BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
             BL.writeFile (notebookDir </> "library-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
@@ -526,6 +527,22 @@ instance CSV.DefaultOrdered ContractRefs where
         , "crRefs"
         ]
 
+
+data AddressType = Contract | NotContract deriving (Show, Ord, Eq, Generic)
+addressInfoToAddressType (ContractAddress _) = Contract
+addressInfoToAddressType _ = NotContract
+data AddressAndInfo = AddressAndInfo
+    { aaiAddress :: Address
+    , aaiType :: AddressType
+    } deriving (Show, Eq, Generic)
+instance CSV.FromNamedRecord AddressAndInfo
+instance CSV.ToNamedRecord AddressAndInfo
+instance CSV.DefaultOrdered AddressAndInfo where
+    headerOrder _ = CSV.header
+        [ "aaiAddress"
+        , "aaiRefs"
+        ]
+
 data LibraryRefs = LibraryRefs
     { libAddress :: Address
     , libRefs :: Text
@@ -611,6 +628,15 @@ instance CSV.FromField BlockNumber where
 
 instance CSV.ToField BlockNumber where
     toField (BlockNumber n) = CSV.toField n
+
+instance CSV.FromField AddressType where
+    parseField "Contract" = pure Contract
+    parseField "NotContract" =  pure NotContract
+    parseField _ = mzero
+
+instance CSV.ToField AddressType where
+    toField Contract = "Contract"
+    toField NotContract = "NotContract"
 
 -- printTransactions = do
 --     readIn <- CSV.decodeByName <$> BL.readFile "transactions.csv"
@@ -798,7 +824,7 @@ getAddressInfo address contractCode = do
             let (bytecode, remainder) = B16.decode $ encodeUtf8 $ T.drop 2 code
             if remainder /= B.empty then error (show remainder) else pure ()
             case parseOnly (parseOpCodes <* endOfInput) bytecode of
-                Left err -> Left $ "  - Opcodes could not be parsed in full: " ++ err
+                Left err -> Left $ " - Opcodes could not be parsed in full: " ++ err
                 Right parsed ->
                     let addresses = findReferences parsed
                     in Right $ ContractAddress addresses
