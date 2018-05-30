@@ -137,6 +137,16 @@ main = do
                 hPutStr handle "FromAddress" >> hPutStr handle ","
                 hPutStr handle "ToAddress" >> hPutStrLn handle ""
                 mapM_ (printTransactionsOfBlock handle) [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
+        -- "print-addresses" -> do
+        --     let endBlockNumber = 500000
+        --     let n = case args of
+        --             (a:_) -> read a
+        --             _ -> 20000
+        --     -- Take all the transactions
+        --     withFile "contract-or-not.csv" WriteMode $ \handle -> do
+        --         hPutStr handle "Address" >> hPutStr handle ","
+        --         hPutStr handle "Type" >> hPutStrLn handle ""
+        --         mapM_ (printTransactionsOfBlock handle) [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
         "print-libs-end" -> do
             let n = case args of
                     (a:_) -> read a
