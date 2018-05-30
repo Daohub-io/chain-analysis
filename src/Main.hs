@@ -359,7 +359,10 @@ printTransactionsOfBlock handle blocknumberInt = do
                     BL.writeFile filePath $ Aeson.encode block
                     pure block
     let thisBlockTime = posixSecondsToUTCTime $ fromInteger $ read $ T.unpack $ blockTimestamp block
-    mapM_ (printTransactionOfBlock handle) $ blockTransactions block
+    mapM_ (\block -> do
+        printTransactionOfBlock stdout block
+        printTransactionOfBlock handle block
+        ) $ blockTransactions block
 
 printTransactionOfBlock handle transaction = do
     hPutStr handle (show $ (\(BlockNumber i)->i) $ txBlockNumber transaction) >> hPutStr handle ","
