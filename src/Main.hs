@@ -127,7 +127,7 @@ main = do
                 libMap = invertReferences refMap
             printLibs libNameMap libMap
         "print-transactions" -> do
-            let endBlockNumber = 500000
+            let endBlockNumber = 4900000
             let n = case args of
                     (a:_) -> read a
                     _ -> 20000
