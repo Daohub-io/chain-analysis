@@ -162,10 +162,10 @@ main = do
                 <$> T.lines <$> T.readFile "KnownWalletLibs.txt"
             -- Process each of the blocks, starting at the specified end block
             -- and working backwatds, updating the data structures as we go.
-            (Just startTime, Just endTime, contractStore, transactionMap, newlyRecognisedWallets)
+            (Just startTime, Just endTime, contractStore, transactionMap, newlyRecognisedWallets, transactions)
                 <- foldM
                     (processBlock knownWallets)
-                    (Nothing, Nothing, cachedMap, M.empty, [])
+                    (Nothing, Nothing, cachedMap, M.empty, [], [])
                     [endBlockNumber,(endBlockNumber-1)..(endBlockNumber-n-1)]
             let
                 -- Filter this map to only list references to other contracts.
@@ -193,7 +193,8 @@ main = do
             let notebookDir = "../notebooks"
             createDirectoryIfMissing True notebookDir
             BL.writeFile (notebookDir </> "contract-or-account.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,addrInfo)->AddressAndInfo address (addressInfoToAddressType addrInfo)) $ M.toList contractStore
-            BL.writeFile (notebookDir </> "all-transactions.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
+            BL.writeFile (notebookDir </> "transactions.csv") $ CSV.encodeDefaultOrderedByName $ (transactions :: [Transaction])
+            BL.writeFile (notebookDir </> "transaction-counts.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,n)->TransactionCount address n) $ M.toList transactionMap
             BL.writeFile (notebookDir </> "contract-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->ContractRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList refMap
             BL.writeFile (notebookDir </> "library-references.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libMap
             -- BL.writeFile (notebookDir </> "known-library-names.csv") $ CSV.encodeDefaultOrderedByName $ map (\(address,refs)->LibraryRefs address (T.intercalate " " $ map (((<>) "0x") . Address.toText) $ S.toList refs)) $ M.toList libNameMap
@@ -322,14 +323,18 @@ referencesKnownLib knownLibs contractStore address =
             AccountAddress -> False
             ContractAddress rs -> not $ S.null $ S.intersection knownLibs rs
 
-
+processBlock
+    :: S.Set Address
+    -> (a, Maybe UTCTime, M.Map Address AddressInfo, M.Map Address Int, [(UTCTime, Int)], [Transaction])
+    -> Integer
+    -> IO (Maybe UTCTime, Maybe UTCTime, M.Map Address AddressInfo, M.Map Address Int, [(UTCTime, Int)], [Transaction])
 processBlock knownWalletLibs args bn = do
     res <- Control.Exception.try $ processBlock' knownWalletLibs args bn
     case res of
         Left e -> let y = e :: SomeException in processBlock' knownWalletLibs args bn
         Right x -> pure x
 
-processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newlyRecognisedWallets) blocknumberInt = do
+processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newlyRecognisedWallets, transactions) blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt
     let blocknumber = BlockNumber blocknumberInt
         filePath = joinPath [blockDir, show blocknumberInt ++ ".json"]
@@ -370,7 +375,7 @@ processBlock' knownWalletLibs (startTime, endTime, refMap, transactionMap, newly
         -- libraries. This needs to use the new refMap, as these are inherently
         -- new addresses.
         newWallets = S.filter (referencesKnownLib knownWalletLibs newRefMap) newlyUsedAddresses
-    pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets)
+    pure $ seq (S.size newWallets) $ (Just thisBlockTime, newEndTime, newRefMap, newTransactionMap, (thisBlockTime,S.size newWallets):newlyRecognisedWallets, (blockTransactions block)++transactions)
 
 processBlockForward blocknumberInt = do
     putStr $ "Processing block: #" ++ show blocknumberInt
